@@ -73,7 +73,7 @@ pub async fn run<'a>(
             // update progress bar
             let mut pb_update = pb
                 .lock()
-                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
+                .map_err(|e| format!("failure acquiring progress bar mutex lock: {e}"))?;
             pb_update
                 .update(1)
                 .map_err(|e| format!("failure on pb update: {e}"))?;
