@@ -2,8 +2,8 @@
 
 _as of 2026-11-10. taken from [https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.5.pdf](https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.5.pdf)._
 
-Year(s) | Available States States Without OD and WAC Data | Federal Jobs | Race, Ethnicity, Education, Sex | Firm Age, Firm Size
---- | --- | --- | --- | ---
+Year(s) | Available States | States Without OD and WAC Data | Federal Jobs | Race, Ethnicity, Education, Sex | Firm Age, Firm Size
+--- | --- | --- | --- | --- | ---
 2002 | 45 | Arkansas, Arizona, DC, Massachusetts, Mississippi, New Hampshire | No | No | No
 2003 | 47 | Arizona, DC, Massachusetts, Mississippi | No | No | No
 2004-2008 | 49 | DC, Massachusetts | No | No | No
