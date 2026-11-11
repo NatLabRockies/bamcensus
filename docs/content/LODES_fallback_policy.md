@@ -1,19 +1,19 @@
-# LODES Retry Policy
+# LODES Fallback Policy
 
 ## Overview
 
 The LODES dataset has incomplete coverage across states and years. Some state/year combinations are missing entirely (e.g., Alaska data is unavailable for 2017-2021, Michigan is unavailable for 2022-2024).
 
-To handle queries that span multiple states and years, bamcensus provides a configurable **retry policy** that automatically attempts alternative years when a requested state/year is unavailable.
+To handle queries that span multiple states and years, bamcensus provides a configurable **fallback policy** that automatically attempts alternative years when a requested state/year is unavailable.
 
 See [Data Availability](./../../bamcensus-lehd/2026-11-10-data-availability.md) for specific gaps in the LODES dataset.
 
-## Retry Policy Types
+## Fallback Policy Types
 
 ### FailAlways (Default)
 
 ```
---retry-policy fail_always
+--fallback fail_always
 ```
 
 Fails immediately if the requested year is unavailable. No retry attempts are made.
@@ -23,7 +23,7 @@ Fails immediately if the requested year is unavailable. No retry attempts are ma
 ### Try Previous Years
 
 ```
---retry-policy try_N_years_back
+--fallback try_N_years_back
 ```
 
 If the requested year fails, attempts N years earlier, in reverse chronological order.
@@ -35,7 +35,7 @@ If the requested year fails, attempts N years earlier, in reverse chronological 
 ### Try Next Years
 
 ```
---retry-policy try_N_years_forward
+--fallback try_N_years_forward
 ```
 
 If the requested year fails, attempts N years later, in chronological order.
@@ -47,7 +47,7 @@ If the requested year fails, attempts N years later, in chronological order.
 ### Bidirectional
 
 ```
---retry-policy bidirectional_N_back_M_forward
+--fallback bidirectional_N_back_M_forward
 ```
 
 If the requested year fails, attempts both earlier and later years in a bidirectional pattern.
@@ -65,13 +65,13 @@ If the requested year fails, attempts both earlier and later years in a bidirect
 lodes_tiger_app wac \
   --year 2023 \
   --geoids 08 \
-  --retry-policy try_2_years_back
+  --fallback try_2_years_back
 
 # Try 1 year forward or 1 year back
 lodes_tiger_app wac \
   --year 2023 \
   --geoids 08 \
-  --retry-policy bidirectional_1_back_1_forward
+  --fallback bidirectional_1_back_1_forward
 
 # Fail if 2023 is unavailable (default)
 lodes_tiger_app wac \
@@ -88,14 +88,14 @@ from bamcensus import run_wac_tiger_python
 result = run_wac_tiger_python(
     year=2023,
     geoids="08,06",
-    retry_policy="try_2_years_back"
+    fallback_policy="try_2_years_back"
 )
 
 # Try both directions
 result = run_wac_tiger_python(
     year=2023,
     geoids="08,06",
-    retry_policy="bidirectional_1_back_1_forward"
+    fallback_policy="bidirectional_1_back_1_forward"
 )
 
 # Default behavior (fail on unavailable year)
@@ -111,7 +111,7 @@ result = run_wac_tiger_python(
 
 When a LODES download returns a **404 Not Found** HTTP response:
 
-1. The retry policy's candidate years are generated in priority order
+1. The fallback policy's candidate years are generated in priority order
 2. Each candidate year is attempted in sequence
 3. The first successful download is used
 4. A warning is printed if a different year was used
@@ -147,7 +147,7 @@ lodes_tiger_app wac \
   --year 2023 \
   --geoids 08,06 \
   --output-resolution county \
-  --retry-policy try_1_years_back
+  --fallback try_1_years_back
 ```
 
 ### Known Gaps Handling
@@ -157,7 +157,7 @@ Alaska data is missing for 2017-2021. Query jobs across all states for 2020, aut
 ```bash
 lodes_tiger_app wac \
   --year 2020 \
-  --retry-policy bidirectional_3_back_2_forward
+  --fallback bidirectional_3_back_2_forward
 ```
 
 ### Ensure Consistent Data Year
@@ -167,14 +167,14 @@ Query employment data and require it be from exactly 2020 (no fallback):
 ```bash
 lodes_tiger_app wac \
   --year 2020 \
-  --retry-policy fail_always
+  --fallback fail_always
 ```
 
 ## Configuration
 
 ### Default Behavior
 
-If `--retry-policy` is not specified, `fail_always` is used (no retry attempts).
+If `--fallback` is not specified, `fail_always` is used (no retry attempts).
 
 ### Valid Policy Formats
 
@@ -188,14 +188,14 @@ If `--retry-policy` is not specified, `fail_always` is used (no retry attempts).
 ### Programmatic Usage (Rust)
 
 ```rust
-use bamcensus_lehd::model::RetryPolicy;
+use bamcensus_lehd::model::FallbackPolicy;
 use std::str::FromStr;
 
 // Parse from string
-let policy = RetryPolicy::from_str("try_2_years_back")?;
+let policy = FallbackPolicy::from_str("try_2_years_back")?;
 
 // Create directly
-let policy = RetryPolicy::TryPreviousYears(2);
+let policy = FallbackPolicy::TryPreviousYears(2);
 
 // Get candidate years
 let candidates = policy.candidate_years(2023);
@@ -204,6 +204,6 @@ let candidates = policy.candidate_years(2023);
 
 ## Notes
 
-- The retry policy only affects LODES data fetching. TIGER geometry data uses a fixed year based on the LODES edition.
-- Retry policies are per-URL; each state's data is independently retried if necessary.
+- The fallback policy only affects LODES data fetching. TIGER geometry data uses a fixed year based on the LODES edition.
+- Fallback policies are per-URL; each state's data is independently retried if necessary.
 - Future years are only attempted if explicitly configured with forward retry policies.

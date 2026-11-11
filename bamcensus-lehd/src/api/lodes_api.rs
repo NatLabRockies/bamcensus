@@ -1,4 +1,4 @@
-use crate::model::{RetryPolicy, WacRow, WacSegment, WacValue};
+use crate::model::{FallbackPolicy, WacRow, WacSegment, WacValue};
 use crate::ops::lodes_agg;
 use bamcensus_core::{
     model::identifier::{Geoid, GeoidType},
@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 /// # Returns
 ///
 /// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if the URL returns data
-/// - `Ok(None)` if the URL returns a 404 (not found, will trigger retry)
-/// - `Err(String)` for other errors that should not trigger retry
+/// - `Ok(None)` if the URL returns a 404 (not found, will trigger fallback)
+/// - `Err(String)` for other errors that should not trigger fallback
 async fn try_fetch_lodes_data(
     client: &Client,
     url: &str,
@@ -66,17 +66,17 @@ async fn try_fetch_lodes_data(
     Ok(Some(result))
 }
 
-/// Applies the retry policy to a LODES URL query.
+/// Applies the fallback policy to a LODES URL query.
 ///
 /// Given a base URL that may contain `{year}` placeholder, generates alternative URLs
-/// based on the retry policy and attempts each in sequence until one succeeds.
+/// based on the fallback policy and attempts each in sequence until one succeeds.
 ///
 /// # Arguments
 ///
 /// * `client` - HTTP client for making requests
 /// * `base_url` - URL with `{year}` placeholder (e.g., `.../2021/...` where `2021` is the year)
 /// * `base_year` - The originally requested year
-/// * `retry_policy` - Policy for retry attempts
+/// * `fallback_policy` - Policy for retry attempts
 /// * `wac_segments` - WAC segments to extract from the response
 ///
 /// # Returns
@@ -84,14 +84,14 @@ async fn try_fetch_lodes_data(
 /// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if any URL succeeds
 /// - `Ok(None)` if all URLs return 404
 /// - `Err(String)` if a fatal error occurs
-async fn run_with_retry(
+async fn run_with_fallback(
     client: &Client,
     base_url: &str,
     base_year: u64,
-    retry_policy: RetryPolicy,
+    fallback_policy: FallbackPolicy,
     wac_segments: &[WacSegment],
 ) -> Result<Option<Vec<(Geoid, Vec<WacValue>)>>, String> {
-    let candidate_years = retry_policy.candidate_years(base_year);
+    let candidate_years = fallback_policy.candidate_years(base_year);
 
     for year in candidate_years {
         let url = base_url.replace(&base_year.to_string(), &year.to_string());
@@ -106,7 +106,7 @@ async fn run_with_retry(
                 return Ok(Some(data));
             }
             Ok(None) => {
-                // 404, continue to next retry candidate
+                // 404, continue to next fallback candidate
                 continue;
             }
             Err(e) => {
@@ -130,10 +130,10 @@ pub async fn run_wac(
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
-    run_wac_with_retry(client, queries, wac_segments, agg, RetryPolicy::FailAlways).await
+    run_wac_with_fallback(client, queries, wac_segments, agg, FallbackPolicy::FailAlways).await
 }
 
-/// runs a set of LODES queries with support for retry policy when state/year is unavailable.
+/// runs a set of LODES queries with support for fallback policy when state/year is unavailable.
 ///
 /// # Arguments
 ///
@@ -141,13 +141,13 @@ pub async fn run_wac(
 /// * `queries` - List of LODES URLs to fetch
 /// * `wac_segments` - WAC segments to extract from each response
 /// * `agg` - Optional aggregation specification
-/// * `retry_policy` - Policy for handling unavailable state/year combinations
-pub async fn run_wac_with_retry(
+/// * `fallback_policy` - Policy for handling unavailable state/year combinations
+pub async fn run_wac_with_fallback(
     client: &Client,
     queries: &[String],
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
-    retry_policy: RetryPolicy,
+    fallback_policy: FallbackPolicy,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
     // setup progress bar
     let pb_builder = kdam::BarBuilder::default()
@@ -155,7 +155,7 @@ pub async fn run_wac_with_retry(
         .desc("LODES downloads");
     let pb = Arc::new(Mutex::new(pb_builder.build()?));
 
-    // Extract base year from the first query URL for retry policy
+    // Extract base year from the first query URL for fallback policy
     // URLs typically follow pattern: .../LODES/public/lodes8/2021/RI_wac_S000_JT00_2021.csv.gz
     let extract_year = |url: &str| -> Option<u64> {
         url.split('/').find_map(|part| part.parse::<u64>().ok())
@@ -169,13 +169,13 @@ pub async fn run_wac_with_retry(
             2021
         });
 
-    // run each query in parallel with retry logic
+    // run each query in parallel with fallback logic
     let responses = queries.iter().map(|url| {
         let client = &client;
         let wac_segments = &wac_segments;
         let pb = pb.clone();
         async move {
-            let result = run_with_retry(client, url, base_year, retry_policy, wac_segments).await;
+            let result = run_with_fallback(client, url, base_year, fallback_policy, wac_segments).await;
 
             // update progress bar
             let _pb_update_result = pb

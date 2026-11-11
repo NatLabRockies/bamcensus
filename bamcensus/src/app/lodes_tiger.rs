@@ -2,7 +2,7 @@ use crate::model::lodes_wac_tiger_row::LodesWacTigerRow;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_lehd::api::lodes_api;
-use bamcensus_lehd::model::{LodesDataset, RetryPolicy, WacSegment};
+use bamcensus_lehd::model::{LodesDataset, FallbackPolicy, WacSegment};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::tiger_api;
 use geo::Geometry;
@@ -28,22 +28,22 @@ pub struct LodesTigerResponse {
 /// * `agg_geoid_type` - Optional aggregation level for output
 /// * `wac_segments` - WAC segments to retrieve from LODES
 /// * `dataset` - LODES dataset specification (year, edition, job type, segment)
-/// * `retry_policy` - Retry policy for handling unavailable state/year combinations
+/// * `fallback_policy` - Fallback policy for handling unavailable state/year combinations
 ///
-/// # Retry Policy
+/// # Fallback Policy
 ///
-/// When LODES data for a requested state/year is unavailable (404 Not Found), the retry_policy
+/// When LODES data for a requested state/year is unavailable (404 Not Found), the fallback_policy
 /// determines fallback behavior:
 ///
-/// - `RetryPolicy::FailAlways` - Fail immediately if year is unavailable (default)
-/// - `RetryPolicy::TryPreviousYears(n)` - Try N earlier years before failing
-/// - `RetryPolicy::TryNextYears(n)` - Try N later years before failing
-/// - `RetryPolicy::BiDirectional { past: n, future: m }` - Try N earlier or M later years
+/// - `FallbackPolicy::FailAlways` - Fail immediately if year is unavailable (default)
+/// - `FallbackPolicy::TryPreviousYears(n)` - Try N earlier years before failing
+/// - `FallbackPolicy::TryNextYears(n)` - Try N later years before failing
+/// - `FallbackPolicy::BiDirectional { past: n, future: m }` - Try N earlier or M later years
 ///
 /// # Example
 ///
 /// ```ignore
-/// use bamcensus_lehd::model::{LodesDataset, LodesEdition, LodesJobType, RetryPolicy, WacSegment, WorkplaceSegment};
+/// use bamcensus_lehd::model::{LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment};
 /// use bamcensus_core::model::identifier::Geoid;
 /// use bamcensus_core::model::identifier::GeoidType;
 ///
@@ -56,10 +56,10 @@ pub struct LodesTigerResponse {
 ///     segment: WorkplaceSegment::S000,
 ///     year: 2020,
 /// };
-/// let retry_policy = RetryPolicy::TryPreviousYears(2);
+/// let fallback_policy = FallbackPolicy::TryPreviousYears(2);
 ///
 /// # tokio_test::block_on(async {
-///     let res = run(&geoids, &wildcard, &wac_segments, &dataset, retry_policy).await.unwrap();
+///     let res = run(&geoids, &wildcard, &wac_segments, &dataset, fallback_policy).await.unwrap();
 ///     println!(
 ///         "found {} responses, {} errors",
 ///         res.join_dataset.len(),
@@ -76,7 +76,7 @@ pub async fn run(
     agg_geoid_type: &Option<GeoidType>,
     wac_segments: &[WacSegment],
     dataset: &LodesDataset,
-    retry_policy: RetryPolicy,
+    fallback_policy: FallbackPolicy,
 ) -> Result<LodesTigerResponse, String> {
     // input: i have a set of geoids that describe a region. i want to download
     // lodes data and aggregate it to some GeoidType.
@@ -94,10 +94,10 @@ pub async fn run(
     let agg_fn = bamcensus_core::ops::agg::NumericAggregation::Sum;
     let agg = agg_geoid_type.map(|g| (g, agg_fn));
 
-    // execute LODES downloads with retry policy
+    // execute LODES downloads with fallback policy
 
     let client: Client = Client::new();
-    let lodes_rows = lodes_api::run_wac_with_retry(&client, &lodes_queries, wac_segments, agg, retry_policy).await?;
+    let lodes_rows = lodes_api::run_wac_with_fallback(&client, &lodes_queries, wac_segments, agg, fallback_policy).await?;
 
     // filter result. LODES collects by State. here we only accept rows where the
     // input geoids are the (FIPS hierarchical) parent.

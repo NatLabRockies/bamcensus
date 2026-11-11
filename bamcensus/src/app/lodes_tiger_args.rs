@@ -3,7 +3,7 @@ use crate::model::lodes_tiger_output_row::LodesTigerOutputRow;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_core::model::identifier::{Geoid, StateCode};
 use bamcensus_lehd::model::{
-    LodesDataset, LodesEdition, LodesJobType, RetryPolicy, WacSegment, WorkplaceSegment,
+    LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment,
 };
 use clap::{Args, Parser, Subcommand};
 use itertools::Itertools;
@@ -40,7 +40,7 @@ pub struct LodesTigerWacApi {
     /// workplace area characteristic segments, see LODES documentation
     #[arg(long, default_value_t = String::from("C000"))]
     wac_segments: String,
-    /// LODES definition, see LODES documentation, default latest
+    /// LODES definitionf, see LODES documentation, default latest
     #[arg(long, default_value = "lodes8")]
     edition: LodesEdition,
     /// LODES workforce segment defined in LODES schema documentation
@@ -49,18 +49,18 @@ pub struct LodesTigerWacApi {
     /// WAC job type defined in LODES schema documentation
     #[arg(long, default_value = "jt00")]
     jobtype: LodesJobType,
-    /// Retry policy for handling unavailable state/year combinations:
+    /// Fallback policy for handling unavailable state/year combinations:
     /// - fail_always: fail immediately (default)
     /// - try_N_years_back: try N years earlier on failure
     /// - try_N_years_forward: try N years later on failure
     /// - bidirectional_N_back_M_forward: try N years back or M years forward
     /// Example: try_2_years_back, try_1_years_forward, bidirectional_1_back_2_forward
-    #[arg(long, default_value = "fail_always", value_parser = parse_retry_policy)]
-    pub retry_policy: RetryPolicy,
+    #[arg(long, default_value = "fail_always", value_parser = parse_fallback_policy)]
+    pub fallback: FallbackPolicy,
 }
 
-fn parse_retry_policy(s: &str) -> Result<RetryPolicy, String> {
-    RetryPolicy::from_str(s)
+fn parse_fallback_policy(s: &str) -> Result<FallbackPolicy, String> {
+    FallbackPolicy::from_str(s)
 }
 
 impl LodesTigerCli {
@@ -101,7 +101,7 @@ async fn run_wac(args: &LodesTigerWacApi) {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 
-    let res = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset, args.retry_policy)
+    let res = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset, args.fallback)
         .await
         .unwrap();
     println!(
