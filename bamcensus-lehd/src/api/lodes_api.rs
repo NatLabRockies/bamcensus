@@ -1,4 +1,4 @@
-use crate::model::{WacRow, WacSegment, WacValue};
+use crate::model::{RetryPolicy, WacRow, WacSegment, WacValue};
 use crate::ops::lodes_agg;
 use bamcensus_core::{
     model::identifier::{Geoid, GeoidType},
@@ -12,6 +12,114 @@ use kdam::BarExt;
 use reqwest::Client;
 use std::sync::{Arc, Mutex};
 
+/// Attempts to fetch and parse a single LODES dataset from a URL.
+///
+/// # Returns
+///
+/// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if the URL returns data
+/// - `Ok(None)` if the URL returns a 404 (not found, will trigger retry)
+/// - `Err(String)` for other errors that should not trigger retry
+async fn try_fetch_lodes_data(
+    client: &Client,
+    url: &str,
+    wac_segments: &[WacSegment],
+) -> Result<Option<Vec<(Geoid, Vec<WacValue>)>>, String> {
+    let res = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| format!("failure sending LODES HTTP request: {e}"))?;
+
+    // Handle 404 as a recoverable error (state/year not available)
+    if res.status() == 404 {
+        return Ok(None);
+    }
+
+    // Fail on other HTTP errors
+    let status = res.status();
+    if !status.is_success() {
+        return Err(format!(
+            "LODES HTTP error {}: {}",
+            status.as_u16(),
+            url
+        ));
+    }
+
+    let gzip_bytes = res
+        .bytes()
+        .await
+        .map_err(|e| format!("failure reading response body: {e}"))?;
+
+    let mut reader = ReaderBuilder::new().from_reader(GzDecoder::new(&gzip_bytes[..]));
+    let mut result = vec![];
+    for r in reader.deserialize() {
+        let row: WacRow =
+            r.map_err(|e| format!("failure reading LODES response row: {e}"))?;
+        let geoid = row.geoid()?;
+        let mut row_result = vec![];
+        for segment in wac_segments.iter() {
+            row_result.push(WacValue::new(*segment, row.get(segment)));
+        }
+        result.push((geoid, row_result));
+    }
+
+    Ok(Some(result))
+}
+
+/// Applies the retry policy to a LODES URL query.
+///
+/// Given a base URL that may contain `{year}` placeholder, generates alternative URLs
+/// based on the retry policy and attempts each in sequence until one succeeds.
+///
+/// # Arguments
+///
+/// * `client` - HTTP client for making requests
+/// * `base_url` - URL with `{year}` placeholder (e.g., `.../2021/...` where `2021` is the year)
+/// * `base_year` - The originally requested year
+/// * `retry_policy` - Policy for retry attempts
+/// * `wac_segments` - WAC segments to extract from the response
+///
+/// # Returns
+///
+/// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if any URL succeeds
+/// - `Ok(None)` if all URLs return 404
+/// - `Err(String)` if a fatal error occurs
+async fn run_with_retry(
+    client: &Client,
+    base_url: &str,
+    base_year: u64,
+    retry_policy: RetryPolicy,
+    wac_segments: &[WacSegment],
+) -> Result<Option<Vec<(Geoid, Vec<WacValue>)>>, String> {
+    let candidate_years = retry_policy.candidate_years(base_year);
+
+    for year in candidate_years {
+        let url = base_url.replace(&base_year.to_string(), &year.to_string());
+        match try_fetch_lodes_data(client, &url, wac_segments).await {
+            Ok(Some(data)) => {
+                if year != base_year {
+                    eprintln!(
+                        "LODES data for year {} not available; using {} instead",
+                        base_year, year
+                    );
+                }
+                return Ok(Some(data));
+            }
+            Ok(None) => {
+                // 404, continue to next retry candidate
+                continue;
+            }
+            Err(e) => {
+                // Fatal error, don't retry
+                return Err(e);
+            }
+        }
+    }
+
+    // All candidates exhausted without success
+    Ok(None)
+}
+
 /// runs a set of LODES queries. each required LODES file is collected in
 /// memory and deserialized into rows of Geoids with WacValues for each
 /// requested WacSegment. the entire dataset is aggregated to the requested
@@ -22,50 +130,64 @@ pub async fn run_wac(
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
+    run_wac_with_retry(client, queries, wac_segments, agg, RetryPolicy::FailAlways).await
+}
+
+/// runs a set of LODES queries with support for retry policy when state/year is unavailable.
+///
+/// # Arguments
+///
+/// * `client` - HTTP client for making requests
+/// * `queries` - List of LODES URLs to fetch
+/// * `wac_segments` - WAC segments to extract from each response
+/// * `agg` - Optional aggregation specification
+/// * `retry_policy` - Policy for handling unavailable state/year combinations
+pub async fn run_wac_with_retry(
+    client: &Client,
+    queries: &[String],
+    wac_segments: &[WacSegment],
+    agg: Option<(GeoidType, NumericAggregation)>,
+    retry_policy: RetryPolicy,
+) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
     // setup progress bar
     let pb_builder = kdam::BarBuilder::default()
         .total(queries.len())
         .desc("LODES downloads");
     let pb = Arc::new(Mutex::new(pb_builder.build()?));
 
-    // run each query in parallel
+    // Extract base year from the first query URL for retry policy
+    // URLs typically follow pattern: .../LODES/public/lodes8/2021/RI_wac_S000_JT00_2021.csv.gz
+    let extract_year = |url: &str| -> Option<u64> {
+        url.split('/').find_map(|part| part.parse::<u64>().ok())
+    };
+
+    let base_year = queries
+        .first()
+        .and_then(|url| extract_year(url))
+        .unwrap_or_else(|| {
+            eprintln!("warning: could not extract year from LODES URLs");
+            2021
+        });
+
+    // run each query in parallel with retry logic
     let responses = queries.iter().map(|url| {
         let client = &client;
         let wac_segments = &wac_segments;
         let pb = pb.clone();
         async move {
-            let res = client
-                .get(url)
-                .send()
-                .await
-                .map_err(|e| format!("failure sending LODES HTTP request: {e}"))?;
-            let gzip_bytes = res
-                .bytes()
-                .await
-                .map_err(|e| format!("failure reading response body: {e}"))?;
-            let mut reader = ReaderBuilder::new().from_reader(GzDecoder::new(&gzip_bytes[..]));
-            let mut result = vec![];
-            for r in reader.deserialize() {
-                let row: WacRow =
-                    r.map_err(|e| format!("failure reading LODES response row: {e}"))?;
-                let geoid = row.geoid()?;
-                let mut row_result = vec![];
-                for segment in wac_segments.iter() {
-                    row_result.push(WacValue::new(*segment, row.get(segment)));
-                }
-                result.push((geoid, row_result));
-            }
+            let result = run_with_retry(client, url, base_year, retry_policy, wac_segments).await;
 
             // update progress bar
-            let mut pb_update = pb
+            let _pb_update_result = pb
                 .lock()
-                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
-            pb_update
-                .update(1)
-                .map_err(|e| format!("failure on pb update: {e}"))?;
-            pb_update.set_description(url.split('/').next_back().unwrap_or_default());
+                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))
+                .and_then(|mut pb_guard| {
+                    pb_guard
+                        .update(1)
+                        .map_err(|e| format!("failure on pb update: {e}"))
+                })?;
 
-            Ok(result)
+            result.map(|opt| opt.unwrap_or_default())
         }
     });
     eprintln!(); // progress bar terminated

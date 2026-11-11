@@ -3,10 +3,11 @@ use crate::model::lodes_tiger_output_row::LodesTigerOutputRow;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_core::model::identifier::{Geoid, StateCode};
 use bamcensus_lehd::model::{
-    LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
+    LodesDataset, LodesEdition, LodesJobType, RetryPolicy, WacSegment, WorkplaceSegment,
 };
 use clap::{Args, Parser, Subcommand};
 use itertools::Itertools;
+use std::str::FromStr;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -48,6 +49,18 @@ pub struct LodesTigerWacApi {
     /// WAC job type defined in LODES schema documentation
     #[arg(long, default_value = "jt00")]
     jobtype: LodesJobType,
+    /// Retry policy for handling unavailable state/year combinations:
+    /// - fail_always: fail immediately (default)
+    /// - try_N_years_back: try N years earlier on failure
+    /// - try_N_years_forward: try N years later on failure
+    /// - bidirectional_N_back_M_forward: try N years back or M years forward
+    /// Example: try_2_years_back, try_1_years_forward, bidirectional_1_back_2_forward
+    #[arg(long, default_value = "fail_always", value_parser = parse_retry_policy)]
+    pub retry_policy: RetryPolicy,
+}
+
+fn parse_retry_policy(s: &str) -> Result<RetryPolicy, String> {
+    RetryPolicy::from_str(s)
 }
 
 impl LodesTigerCli {
@@ -88,7 +101,7 @@ async fn run_wac(args: &LodesTigerWacApi) {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 
-    let res = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset)
+    let res = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset, args.retry_policy)
         .await
         .unwrap();
     println!(
