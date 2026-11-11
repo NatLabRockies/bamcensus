@@ -158,10 +158,7 @@ impl Geoid {
                 s1 == s2
                     && c1 == c2
                     && t1 == t2
-                    && (b2
-                        .0
-                        .get(0..1)
-                        .and_then(|s| s.parse::<u64>().ok()) == Some(bg1.0))
+                    && (b2.0.get(0..1).and_then(|s| s.parse::<u64>().ok()) == Some(bg1.0))
             }
             _ => false,
         }
