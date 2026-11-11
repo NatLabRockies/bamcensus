@@ -1,5 +1,7 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// Defines how LODES API download failures should be handled for a given state/year combination.
 ///
 /// The LODES dataset does not have complete coverage across all states and years. This enum
@@ -22,7 +24,7 @@ use std::fmt;
 /// // Try 2 years back or 1 year forward
 /// let policy = FallbackPolicy::BiDirectional { past: 2, future: 1 };
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 pub enum FallbackPolicy {
     /// Do not retry; fail immediately if the requested state/year is unavailable
     #[default]
