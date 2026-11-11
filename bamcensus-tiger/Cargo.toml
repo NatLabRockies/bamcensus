@@ -1,6 +1,6 @@
 [package]
 name = "bamcensus-tiger"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "BSD-3-Clause"
 repository = "https://github.com/NREL/bamcensus-tiger"
@@ -9,7 +9,7 @@ readme = "README.md"
 description = "Work with geospatial data in the TIGER/Lines datasets"
 
 [dependencies]
-bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
 futures = { workspace = true }
 geo-types = { workspace = true }
 itertools = { workspace = true }

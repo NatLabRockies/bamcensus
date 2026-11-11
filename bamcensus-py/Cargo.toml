@@ -1,6 +1,6 @@
 [package]
 name = "bamcensus-py"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "BSD-3-Clause"
 readme = "README.md"
@@ -13,10 +13,10 @@ name = "bamcensus_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-bamcensus = { path = "../bamcensus", version = "0.1.0" }
-bamcensus-acs = { path = "../bamcensus-acs", version = "0.1.0" }
-bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
-bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.1.0" }
+bamcensus = { path = "../bamcensus", version = "0.2.0" }
+bamcensus-acs = { path = "../bamcensus-acs", version = "0.2.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
+bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.2.0" }
 itertools = { workspace = true }
 pyo3 = { version = "0.22.2", features = [
     "extension-module",
