@@ -1,37 +1,37 @@
 [workspace]
 resolver = "2"
 members = [
-  "bamcensus-core",
-  "bamcensus-acs",
-  "bamcensus-tiger",
-  "bamcensus",
-  "bamcensus-lehd",
-  "bamcensus-py",
+    "bamcensus",
+    "bamcensus-acs",
+    "bamcensus-core",
+    "bamcensus-lehd",
+    "bamcensus-py",
+    "bamcensus-tiger",
 ]
 
 [workspace.dependencies]
-serde = { version = "1.0.209", features = ["derive"] }
-serde_json = { version = "1.0.127" }
+clap = { version = "4.3.19", features = ["derive"] }
+config = "0.14.0"
+csv = { version = "1.3.0" }
+derive_more = { version = "1.0.0", features = ["sum"] }
+env_logger = "0.11.3"
+flate2 = "1.0.33"
+futures = { version = "0.3.30" }
 geo = { version = "0.28.0", features = ["use-serde"] }
 geo-types = "0.7.13"
-wkt = { version = "0.11.0", features = ["serde"] }
-env_logger = "0.11.3"
-log = "0.4.19"
-config = "0.14.0"
-kdam = "0.5.0"
-clap = { version = "4.3.19", features = ["derive"] }
-itertools = { version = "0.13.0" }
-csv = { version = "1.3.0" }
-flate2 = "1.0.33"
 geojson = { version = "0.24.1" }
-shapefile = { version = "0.6.0", features = ["geo-types"] }
-thiserror = "1.0.0"
+itertools = { version = "0.13.0" }
+kdam = "0.5.0"
+log = "0.4.19"
 rayon = "1.10.0"
 reqwest = { version = "0.12.7", features = ["json"] }
-futures = { version = "0.3.30" }
+serde = { version = "1.0.209", features = ["derive"] }
+serde_json = { version = "1.0.127" }
+shapefile = { version = "0.6.0", features = ["geo-types"] }
+tempfile = "3.12.0"
+thiserror = "1.0.0"
 tokio = { version = "1.40.0", features = ["full"] }
 tokio-test = "0.4.2"
 tokio-util = { version = "0.7.11", features = ["compat"] }
-tempfile = "3.12.0"
+wkt = { version = "0.11.0", features = ["serde"] }
 zip = "2.2.0"
-derive_more = { version = "1.0.0", features = ["sum"] }

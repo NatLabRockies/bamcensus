@@ -1,9 +1,11 @@
-use super::{LodesEdition, LodesJobType, OdPart, WorkplaceSegment, BASE_URL, LATEST_YEAR};
+use super::{
+    LodesEdition, LodesJobType, LodesQuery, OdPart, WorkplaceSegment, BASE_URL, LATEST_YEAR,
+};
 use bamcensus_core::model::identifier::{Geoid, GeoidType, StateCode};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Deserialize, Serialize, Clone, Copy, Debug)]
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum LodesDataset {
     OD {
@@ -97,11 +99,65 @@ impl LodesDataset {
         }
     }
 
+    pub fn year(&self) -> u64 {
+        match self {
+            LodesDataset::OD { year, .. }
+            | LodesDataset::RAC { year, .. }
+            | LodesDataset::WAC { year, .. } => *year,
+        }
+    }
+
+    pub fn with_year(&self, year: u64) -> Self {
+        match *self {
+            LodesDataset::OD {
+                edition,
+                job_type,
+                od_part,
+                ..
+            } => LodesDataset::OD {
+                edition,
+                job_type,
+                od_part,
+                year,
+            },
+            LodesDataset::RAC {
+                edition,
+                job_type,
+                segment,
+                ..
+            } => LodesDataset::RAC {
+                edition,
+                job_type,
+                segment,
+                year,
+            },
+            LodesDataset::WAC {
+                edition,
+                job_type,
+                segment,
+                ..
+            } => LodesDataset::WAC {
+                edition,
+                job_type,
+                segment,
+                year,
+            },
+        }
+    }
+
+    pub fn create_query(&self, geoid: &Geoid) -> Result<LodesQuery, String> {
+        LodesQuery::new(*self, geoid)
+    }
+
     /// creates a URI to a LODES datasets based on the directory and file
     /// naming conventions described in the LODESTechDoc8.1.pdf file.
     /// see <https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.1.pdf>
     pub fn create_uri(&self, geoid: &Geoid) -> Result<String, String> {
         let sc: StateCode = geoid.to_state().try_into()?;
+        self.create_uri_for_state(&sc)
+    }
+
+    pub fn create_uri_for_state(&self, sc: &StateCode) -> Result<String, String> {
         let state_code = sc.to_state_abbreviation();
         match self {
             LodesDataset::OD {
@@ -110,7 +166,7 @@ impl LodesDataset {
                 od_part,
                 year,
             } => {
-                validate_availability(*year, &sc)?;
+                validate_availability(*year, sc)?;
                 let filename = format!(
                     "{}_od_{}_{}_{}.csv.gz",
                     state_code.to_lowercase(),
@@ -157,7 +213,7 @@ impl LodesDataset {
                 segment,
                 year,
             } => {
-                validate_availability(*year, &sc)?;
+                validate_availability(*year, sc)?;
                 let filename = format!(
                     "{}_wac_{}_{}_{}.csv.gz",
                     state_code.to_lowercase(),

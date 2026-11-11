@@ -1,13 +1,14 @@
 use bamcensus::app::lodes_tiger;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_lehd::model::{
-    LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
+    FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
 };
 use itertools::Itertools;
 use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
 use pyo3::{exceptions::PyException, prelude::*};
 use serde::de;
+use std::str::FromStr;
 use wkt::ToWkt;
 
 /// kwds example: https://pyo3.rs/main/function/signature#using-pyo3signature--
@@ -58,8 +59,17 @@ pub fn run_wac_tiger_python<'a>(
             Ok(None)
         }
     })?;
+    let fallback_policy = kwds.map_or(Ok(FallbackPolicy::FailAlways), |m| {
+        if m.contains("fallback_policy")? {
+            let policy_str: String = get_string("fallback_policy", m)?;
+            FallbackPolicy::from_str(&policy_str)
+                .map_err(|e| PyException::new_err(format!("invalid fallback_policy argument: {e}")))
+        } else {
+            Ok(FallbackPolicy::FailAlways)
+        }
+    })?;
 
-    let future = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset);
+    let future = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset, fallback_policy);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

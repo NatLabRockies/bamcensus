@@ -1,7 +1,9 @@
 pub mod constants;
+mod fallback_policy;
 mod lodes_dataset;
 mod lodes_edition;
 mod lodes_job_type;
+mod lodes_query;
 mod od_job_segment;
 mod od_part;
 pub mod od_row;
@@ -11,9 +13,11 @@ mod wac_segment;
 mod wac_value;
 mod workplace_segment;
 
+pub use fallback_policy::FallbackPolicy;
 pub use lodes_dataset::LodesDataset;
 pub use lodes_edition::LodesEdition;
 pub use lodes_job_type::LodesJobType;
+pub use lodes_query::LodesQuery;
 pub use od_job_segment::OdJobSegment;
 pub use od_part::OdPart;
 pub use wac_row::WacRow;

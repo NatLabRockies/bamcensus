@@ -5,7 +5,7 @@ use std::fmt::Display;
 // scripts for downloading LODES datasets
 // see https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.1.pdf
 
-#[derive(Default, ValueEnum, Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Default, ValueEnum, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum LodesJobType {
     #[default]

@@ -2,7 +2,7 @@ use crate::model::lodes_wac_tiger_row::LodesWacTigerRow;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_lehd::api::lodes_api;
-use bamcensus_lehd::model::{LodesDataset, WacSegment};
+use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, WacSegment};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::tiger_api;
 use geo::Geometry;
@@ -17,33 +17,53 @@ pub struct LodesTigerResponse {
     pub join_errors: Vec<String>,
 }
 
-/// runs a query to ACS. the result will include a list of GEOIDs alongside
-/// ACS data. all GEOIDs are used to run a set of downloads from the TIGER/Lines
-/// datasets. the geometries from TIGER are combined with the ACS data producing
-/// AcsTigerRows.
+/// runs a LODES WAC query combined with TIGER geography data. the result will include a list of
+/// GEOIDs alongside LODES workplace characteristics (WAC) data. all GEOIDs are used to run a set
+/// of downloads from both the LODES dataset and TIGER/Lines datasets. the geometries from TIGER
+/// are combined with the LODES WAC data producing LodesWacTigerRows.
+///
+/// # Arguments
+///
+/// * `geoids` - List of GEOIDs to query; if empty, all states are used
+/// * `agg_geoid_type` - Optional aggregation level for output
+/// * `wac_segments` - WAC segments to retrieve from LODES
+/// * `dataset` - LODES dataset specification (year, edition, job type, segment)
+/// * `fallback_policy` - Fallback policy for handling unavailable state/year combinations
+///
+/// # Fallback Policy
+///
+/// When LODES data for a requested state/year is unavailable (404 Not Found), the fallback_policy
+/// determines fallback behavior:
+///
+/// - `FallbackPolicy::FailAlways` - Fail immediately if year is unavailable (default)
+/// - `FallbackPolicy::TryPreviousYears(n)` - Try N earlier years before failing
+/// - `FallbackPolicy::TryNextYears(n)` - Try N later years before failing
+/// - `FallbackPolicy::BiDirectional { past: n, future: m }` - Try N earlier or M later years
 ///
 /// # Example
 ///
 /// ```ignore
-/// use bamcensus_app::acs_tiger;
-/// use bamcensus_acs::model::acs_type::AcsType;
-/// use bamcensus_core::model::identifier::geoid::Geoid;
-/// use bamcensus_core::model::identifier::geoid_type::GeoidType;
-/// use bamcensus_core::model::identifier::fips;
+/// use bamcensus_lehd::model::{LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment};
+/// use bamcensus_core::model::identifier::Geoid;
+/// use bamcensus_core::model::identifier::GeoidType;
 ///
-/// let year = 2020;
-/// let acs_type = AcsType::FiveYear;
-/// let acs_get_query = vec![String::from("NAME"), String::from("B01001_001E")];
-/// let geoid = Geoid::State(fips::State(08));
-/// let wildcard = GeoidType::County;
+/// let geoids = vec![Geoid::try_from("08").unwrap()];
+/// let wildcard = Some(GeoidType::County);
+/// let wac_segments = vec![WacSegment::C000];
+/// let dataset = LodesDataset::WAC {
+///     edition: LodesEdition::Lodes8,
+///     job_type: LodesJobType::JT00,
+///     segment: WorkplaceSegment::S000,
+///     year: 2020,
+/// };
+/// let fallback_policy = FallbackPolicy::TryPreviousYears(2);
 ///
 /// # tokio_test::block_on(async {
-///     let res = acs_tiger::run(year, acs_type, acs_get_query, Some(geoid), Some(wildcard), None).await.unwrap();
+///     let res = run(&geoids, &wildcard, &wac_segments, &dataset, fallback_policy).await.unwrap();
 ///     println!(
-///         "found {} responses, {}/{}/{} errors",
+///         "found {} responses, {} errors",
 ///         res.join_dataset.len(),
-///         res.tiger_errors.len(),
-///         res.join_errors.len(),
+///         res.tiger_errors.len() + res.join_errors.len(),
 ///     );
 ///     for row in res.join_dataset.into_iter() {
 ///         println!("{}", row)
@@ -56,6 +76,7 @@ pub async fn run(
     agg_geoid_type: &Option<GeoidType>,
     wac_segments: &[WacSegment],
     dataset: &LodesDataset,
+    fallback_policy: FallbackPolicy,
 ) -> Result<LodesTigerResponse, String> {
     // input: i have a set of geoids that describe a region. i want to download
     // lodes data and aggregate it to some GeoidType.
@@ -67,16 +88,23 @@ pub async fn run(
     };
     let lodes_queries = geoids
         .iter()
-        .map(|geoid| dataset.create_uri(geoid))
+        .map(|geoid| dataset.create_query(geoid))
         .collect::<Result<Vec<_>, _>>()?;
 
     let agg_fn = bamcensus_core::ops::agg::NumericAggregation::Sum;
     let agg = agg_geoid_type.map(|g| (g, agg_fn));
 
-    // execute LODES downloads
+    // execute LODES downloads with fallback policy
 
     let client: Client = Client::new();
-    let lodes_rows = lodes_api::run_wac(&client, &lodes_queries, wac_segments, agg).await?;
+    let lodes_rows = lodes_api::run_wac_with_fallback(
+        &client,
+        &lodes_queries,
+        wac_segments,
+        agg,
+        fallback_policy,
+    )
+    .await?;
 
     // filter result. LODES collects by State. here we only accept rows where the
     // input geoids are the (FIPS hierarchical) parent.

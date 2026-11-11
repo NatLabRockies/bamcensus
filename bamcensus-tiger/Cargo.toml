@@ -10,16 +10,16 @@ description = "Work with geospatial data in the TIGER/Lines datasets"
 
 [dependencies]
 bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
-itertools = { workspace = true }
-serde = { workspace = true }
-rayon = { workspace = true }
-reqwest = { workspace = true, features = ["stream"] }
 futures = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-shapefile = { workspace = true }
 geo-types = { workspace = true }
-tempfile = { workspace = true }
-zip = { workspace = true }
+itertools = { workspace = true }
 kdam = { workspace = true }
 log = { workspace = true }
+rayon = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+serde = { workspace = true }
+shapefile = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+zip = { workspace = true }

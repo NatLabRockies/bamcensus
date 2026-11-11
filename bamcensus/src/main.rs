@@ -5,7 +5,6 @@ use bamcensus::model::acs_tiger_output_row::AcsTigerOutputRow;
 use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType};
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
-use clap::command;
 use clap::Parser;
 use clap::Subcommand;
 use itertools::Itertools;
