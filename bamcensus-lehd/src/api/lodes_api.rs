@@ -182,11 +182,11 @@ pub async fn run_wac_with_fallback(
                 })?;
 
             match result? {
-                 Some(data) => Ok(data),
-                 None if fallback_policy == FallbackPolicy::FailAlways => {
-                     Err(format!("LODES data not available for {query}"))
-                 }
-                 None => Ok(Vec::new()),
+                Some(data) => Ok(data),
+                None if fallback_policy == FallbackPolicy::FailAlways => {
+                    Err(format!("LODES data not available for {query}"))
+                }
+                None => Ok(Vec::new()),
             }
         }
     });
