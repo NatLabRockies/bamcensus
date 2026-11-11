@@ -174,7 +174,10 @@ mod tests {
 
     #[test]
     fn test_parse_fail_always() {
-        assert_eq!("fail_always".parse::<FallbackPolicy>().unwrap(), FallbackPolicy::FailAlways);
+        assert_eq!(
+            "fail_always".parse::<FallbackPolicy>().unwrap(),
+            FallbackPolicy::FailAlways
+        );
     }
 
     #[test]
@@ -193,11 +196,10 @@ mod tests {
 
     #[test]
     fn test_parse_bidirectional() {
-        let parsed = "bidirectional_2_back_1_forward".parse::<FallbackPolicy>().unwrap();
-        assert_eq!(
-            parsed,
-            FallbackPolicy::BiDirectional { past: 2, future: 1 }
-        );
+        let parsed = "bidirectional_2_back_1_forward"
+            .parse::<FallbackPolicy>()
+            .unwrap();
+        assert_eq!(parsed, FallbackPolicy::BiDirectional { past: 2, future: 1 });
         assert_eq!(parsed.candidate_years(2021), vec![2021, 2020, 2019, 2022]);
     }
 

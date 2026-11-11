@@ -38,11 +38,7 @@ async fn try_fetch_lodes_data(
     // Fail on other HTTP errors
     let status = res.status();
     if !status.is_success() {
-        return Err(format!(
-            "LODES HTTP error {}: {}",
-            status.as_u16(),
-            url
-        ));
+        return Err(format!("LODES HTTP error {}: {}", status.as_u16(), url));
     }
 
     let gzip_bytes = res
@@ -53,8 +49,7 @@ async fn try_fetch_lodes_data(
     let mut reader = ReaderBuilder::new().from_reader(GzDecoder::new(&gzip_bytes[..]));
     let mut result = vec![];
     for r in reader.deserialize() {
-        let row: WacRow =
-            r.map_err(|e| format!("failure reading LODES response row: {e}"))?;
+        let row: WacRow = r.map_err(|e| format!("failure reading LODES response row: {e}"))?;
         let geoid = row.geoid()?;
         let mut row_result = vec![];
         for segment in wac_segments.iter() {
@@ -130,7 +125,14 @@ pub async fn run_wac(
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
-    run_wac_with_fallback(client, queries, wac_segments, agg, FallbackPolicy::FailAlways).await
+    run_wac_with_fallback(
+        client,
+        queries,
+        wac_segments,
+        agg,
+        FallbackPolicy::FailAlways,
+    )
+    .await
 }
 
 /// runs a set of LODES queries with support for fallback policy when state/year is unavailable.
@@ -157,9 +159,8 @@ pub async fn run_wac_with_fallback(
 
     // Extract base year from the first query URL for fallback policy
     // URLs typically follow pattern: .../LODES/public/lodes8/2021/RI_wac_S000_JT00_2021.csv.gz
-    let extract_year = |url: &str| -> Option<u64> {
-        url.split('/').find_map(|part| part.parse::<u64>().ok())
-    };
+    let extract_year =
+        |url: &str| -> Option<u64> { url.split('/').find_map(|part| part.parse::<u64>().ok()) };
 
     let base_year = queries
         .first()
@@ -175,7 +176,8 @@ pub async fn run_wac_with_fallback(
         let wac_segments = &wac_segments;
         let pb = pb.clone();
         async move {
-            let result = run_with_fallback(client, url, base_year, fallback_policy, wac_segments).await;
+            let result =
+                run_with_fallback(client, url, base_year, fallback_policy, wac_segments).await;
 
             // update progress bar
             let _pb_update_result = pb

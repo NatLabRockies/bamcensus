@@ -1,7 +1,7 @@
 use bamcensus::app::lodes_tiger;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_lehd::model::{
-    LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment,
+    FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
 };
 use itertools::Itertools;
 use pyo3::types::IntoPyDict;
@@ -62,9 +62,8 @@ pub fn run_wac_tiger_python<'a>(
     let fallback_policy = kwds.map_or(Ok(FallbackPolicy::FailAlways), |m| {
         if m.contains("fallback_policy")? {
             let policy_str: String = get_string("fallback_policy", m)?;
-            FallbackPolicy::from_str(&policy_str).map_err(|e| {
-                PyException::new_err(format!("invalid fallback_policy argument: {e}"))
-            })
+            FallbackPolicy::from_str(&policy_str)
+                .map_err(|e| PyException::new_err(format!("invalid fallback_policy argument: {e}")))
         } else {
             Ok(FallbackPolicy::FailAlways)
         }

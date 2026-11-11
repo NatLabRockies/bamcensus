@@ -3,7 +3,7 @@ use crate::model::lodes_tiger_output_row::LodesTigerOutputRow;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_core::model::identifier::{Geoid, StateCode};
 use bamcensus_lehd::model::{
-    LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment,
+    FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
 };
 use clap::{Args, Parser, Subcommand};
 use itertools::Itertools;

@@ -2,7 +2,7 @@ use crate::model::lodes_wac_tiger_row::LodesWacTigerRow;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_lehd::api::lodes_api;
-use bamcensus_lehd::model::{LodesDataset, FallbackPolicy, WacSegment};
+use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, WacSegment};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::tiger_api;
 use geo::Geometry;
@@ -97,7 +97,14 @@ pub async fn run(
     // execute LODES downloads with fallback policy
 
     let client: Client = Client::new();
-    let lodes_rows = lodes_api::run_wac_with_fallback(&client, &lodes_queries, wac_segments, agg, fallback_policy).await?;
+    let lodes_rows = lodes_api::run_wac_with_fallback(
+        &client,
+        &lodes_queries,
+        wac_segments,
+        agg,
+        fallback_policy,
+    )
+    .await?;
 
     // filter result. LODES collects by State. here we only accept rows where the
     // input geoids are the (FIPS hierarchical) parent.
