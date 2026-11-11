@@ -152,12 +152,12 @@ lodes_tiger_app wac \
 
 ### Known Gaps Handling
 
-Alaska data is missing for 2017-2021. Query jobs across all states for 2020, automatically using 2016 or 2022:
+Alaska data is missing for 2017-2024. Query jobs across all states for 2020, automatically using 2016 for Alaska:
 
 ```bash
 lodes_tiger_app wac \
   --year 2020 \
-  --fallback bidirectional_3_back_2_forward
+  --fallback try_4_years_back
 ```
 
 ### Ensure Consistent Data Year
