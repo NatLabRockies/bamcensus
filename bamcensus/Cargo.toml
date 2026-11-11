@@ -8,31 +8,25 @@ readme = "README.md"
 repository = "https://github.com/NREL/bamcensus"
 documentation = "https://docs.rs/bamcensus"
 description = "The Behavior and Advanced Mobility Census Dataset Aggregator"
-keywords = [
-    "census",
-    "acs",
-    "lehd",
-    "TIGER/Lines",
-    "geospatial"
-]
+keywords = ["census", "acs", "lehd", "TIGER/Lines", "geospatial"]
 categories = ["command-line-utilities", "science", "science::geo"]
 
 [dependencies]
-env_logger = { workspace = true }
-clap = { workspace = true }
-bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
 bamcensus-acs = { path = "../bamcensus-acs", version = "0.1.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
 bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.1.0" }
 bamcensus-tiger = { path = "../bamcensus-tiger", version = "0.1.0" }
-itertools = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-reqwest = { workspace = true }
+clap = { workspace = true }
+csv = { workspace = true }
+env_logger = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
-wkt = { workspace = true }
-tokio-test = { workspace = true }
-tokio = { workspace = true }
-csv = { workspace = true }
-log = { workspace = true }
+itertools = { workspace = true }
 kdam = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-test = { workspace = true }
+wkt = { workspace = true }

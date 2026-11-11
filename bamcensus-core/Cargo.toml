@@ -9,8 +9,8 @@ repository = "https://github.com/NREL/bamcensus-core"
 documentation = "https://docs.rs/bamcensus-core"
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-itertools = { workspace = true }
 clap = { workspace = true }
 derive_more = { workspace = true }
+itertools = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
