@@ -181,7 +181,13 @@ pub async fn run_wac_with_fallback(
                         .map_err(|e| format!("failure on pb update: {e}"))
                 })?;
 
-            result.map(|opt| opt.unwrap_or_default())
+            match result? {
+                 Some(data) => Ok(data),
+                 None if fallback_policy == FallbackPolicy::FailAlways => {
+                     Err(format!("LODES data not available for {query}"))
+                 }
+                 None => Ok(Vec::new()),
+            }
         }
     });
     eprintln!(); // progress bar terminated
