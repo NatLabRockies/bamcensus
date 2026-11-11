@@ -246,6 +246,8 @@ impl Geoid {
 }
 
 impl HasGeoidString for Geoid {
+    /// Returns the canonical zero-padded numeric FIPS/GEOID string (e.g. `"08031"`),
+    /// without the `<geoid_type>=` prefix produced by [`Display::fmt`] (e.g. `"county=08031"`).
     fn geoid_string(&self) -> String {
         match self {
             Geoid::State(st) => st.geoid_string(),
@@ -282,6 +284,8 @@ impl HasGeoidString for Geoid {
 }
 
 impl Display for Geoid {
+    /// Formats the GEOID with its hierarchy type prefix (e.g. `"county=08031"`).
+    /// To obtain the bare zero-padded FIPS string (`"08031"`), use [`HasGeoidString::geoid_string`].
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}={}", self.variant_name(), self.geoid_string())
     }

@@ -5,7 +5,7 @@ license = "BSD-3-Clause"
 edition = "2021"
 readme = "README.md"
 description = "Interaction with the American Community Survey API"
-repository = "https://github.com/NREL/bamcensus-acs"
+repository = "https://github.com/NLR/bamcensus"
 documentation = "https://docs.rs/bamcensus-acs"
 
 [dependencies]

@@ -82,26 +82,26 @@ lodes_tiger_app wac \
 ### Python API
 
 ```python
-from bamcensus_py import run_wac_tiger_python
+import bamcensus
 
 # Try 2 years back if the requested year is unavailable
-result = run_wac_tiger_python(
+result = bamcensus.run_wac_tiger(
     year=2023,
     geoids="08,06",
-    fallback_policy="try_2_years_back"
+    fallback_policy="try_2_years_back",
 )
 
 # Try both directions
-result = run_wac_tiger_python(
+result = bamcensus.run_wac_tiger(
     year=2023,
     geoids="08,06",
-    fallback_policy="bidirectional_1_back_1_forward"
+    fallback_policy="bidirectional_1_back_1_forward",
 )
 
 # Default behavior (fail on unavailable year)
-result = run_wac_tiger_python(
+result = bamcensus.run_wac_tiger(
     year=2023,
-    geoids="08,06"
+    geoids="08,06",
 )
 ```
 

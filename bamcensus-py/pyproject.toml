@@ -22,7 +22,7 @@ plot = ["matplotlib", "contextily"]
 all = ["bamcensus[tests]", "bamcensus[plot]"]
 
 [project.urls]
-Homepage = "https://github.com/NREL/bamcensus"
+Homepage = "https://github.com/NLR/bamcensus"
 
 [tool.maturin]
 python-source = "python"

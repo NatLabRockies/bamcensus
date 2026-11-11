@@ -42,7 +42,8 @@ pub struct LodesTigerResponse {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
+/// use bamcensus::app::lodes_tiger::run;
 /// use bamcensus_lehd::model::{LodesDataset, LodesEdition, LodesJobType, FallbackPolicy, WacSegment, WorkplaceSegment};
 /// use bamcensus_core::model::identifier::Geoid;
 /// use bamcensus_core::model::identifier::GeoidType;

@@ -21,41 +21,38 @@ pub struct AcsTigerResponse {
 ///
 /// # Example
 ///
-/// ```ignore
-/// use bamcensus_app::acs_tiger;
-/// use bamcensus_acs::model::acs_type::AcsType;
-/// use bamcensus_core::model::identifier::geoid::Geoid;
-/// use bamcensus_core::model::identifier::geoid_type::GeoidType;
-/// use bamcensus_core::model::identifier::fips;
+/// ```no_run
+/// use bamcensus::app::acs_tiger;
+/// use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType};
+/// use bamcensus_core::model::identifier::{fips, Geoid, GeoidType};
 ///
 /// let year = 2020;
 /// let acs_type = AcsType::FiveYear;
 /// let acs_get_query = vec![String::from("NAME"), String::from("B01001_001E")];
-/// let geoid = Geoid::State(fips::State(08));
-/// let wildcard = GeoidType::County;
+/// let geoid = Geoid::State(fips::State(8));
+/// let wildcard = Some(GeoidType::County);
 ///
-/// let acs_geoid_query: AcsGeoidQuery = AcsGeoidQuery::new(Some(geoid), args.wildcard).unwrap();
+/// let acs_geoid_query = AcsGeoidQuery::new(Some(geoid), wildcard).unwrap();
 /// let query_params = AcsApiQueryParams::new(
-///     Some(Geoid::State(fips::State(08))),
-///     2020,
-///     AcsType::FiveYear,
+///     None,
+///     year,
+///     acs_type,
 ///     acs_get_query,
 ///     acs_geoid_query,
 ///     None,
 /// );
 /// # tokio_test::block_on(async {
-///     let res = acs_tiger::run(&query_params).await.unwrap();
-///     println!(
-///         "found {} responses, {}/{} errors",
-///         res.join_dataset.len(),
-///         res.tiger_errors.len(),
-///         res.join_errors.len(),
-///     );
-///     for row in res.join_dataset.into_iter() {
-///         println!("{}", row)
-///     }
+/// let res = acs_tiger::run(&query_params).await.unwrap();
+/// println!(
+///     "found {} responses, {}/{} errors",
+///     res.join_dataset.len(),
+///     res.tiger_errors.len(),
+///     res.join_errors.len(),
+/// );
+/// for row in res.join_dataset.into_iter() {
+///     println!("{}", row)
+/// }
 /// # })
-///
 /// ```
 pub async fn run(query: &AcsApiQueryParams) -> Result<AcsTigerResponse, String> {
     run_batch(&vec![query.clone()]).await

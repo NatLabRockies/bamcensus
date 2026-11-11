@@ -9,7 +9,7 @@
 //!
 //! # Usage
 //!
-//! LODES datasets can be downloaded using the [`crate::ops::tiger_api`] module `run` method.
+//! TIGER/Line datasets can be downloaded using the [`crate::ops::tiger_api`] module `run` method.
 //!
 //! # Data model
 //!
