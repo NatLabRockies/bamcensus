@@ -41,9 +41,8 @@ pub async fn run<'a>(
             let read_path = get_or_download_tiger_zip(client, &tiger.uri).await?;
 
             // unpack archive
-            let read_file = File::open(&read_path).map_err(|e| {
-                format!("failure opening temporary zip archive file location: {e}")
-            })?;
+            let read_file = File::open(&read_path)
+                .map_err(|e| format!("failure opening temporary zip archive file location: {e}"))?;
             let mut z = ZipArchive::new(read_file)
                 .map_err(|e| format!("failure reading temporary zip archive: {e}"))?;
             let shp_filename = get_zip_filename(&z, ".shp")?;
@@ -56,8 +55,8 @@ pub async fn run<'a>(
             let read_result = reader
                 .iter_shapes_and_records()
                 .map(|row| {
-                    let (shape, record) = row
-                        .map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
+                    let (shape, record) =
+                        row.map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
                     into_geoid_and_geometry(shape, record, lookup, &tiger)
                 })
                 .collect::<Result<Vec<_>, String>>()?;

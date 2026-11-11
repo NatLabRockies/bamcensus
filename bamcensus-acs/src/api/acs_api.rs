@@ -11,9 +11,9 @@ pub async fn batch_run<'a>(
     client: &Client,
     queries: &Vec<AcsApiQueryParams>,
 ) -> Result<Vec<(Geoid, Vec<AcsValue>)>, String> {
-    let response = queries.iter().map(|params| async move {
-        run(client, params).await
-    });
+    let response = queries
+        .iter()
+        .map(|params| async move { run(client, params).await });
     let result = stream::iter(response)
         .buffer_unordered(MAX_CONCURRENT_REQUESTS)
         .collect::<Vec<_>>()

@@ -149,7 +149,11 @@ fn filter_rows_by_geoids<T>(
     filter_geoids: &[Geoid],
 ) -> Vec<(Geoid, Vec<T>)> {
     rows.into_iter()
-        .filter(|(c, _)| filter_geoids.iter().any(|p| p == c || p.is_parent_of(c) || c.is_parent_of(p)))
+        .filter(|(c, _)| {
+            filter_geoids
+                .iter()
+                .any(|p| p == c || p.is_parent_of(c) || c.is_parent_of(p))
+        })
         .collect_vec()
 }
 
