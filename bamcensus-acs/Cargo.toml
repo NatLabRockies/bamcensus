@@ -1,6 +1,6 @@
 [package]
 name = "bamcensus-acs"
-version = "0.1.0"
+version = "0.2.0"
 license = "BSD-3-Clause"
 edition = "2021"
 readme = "README.md"
@@ -9,7 +9,7 @@ repository = "https://github.com/NREL/bamcensus-acs"
 documentation = "https://docs.rs/bamcensus-acs"
 
 [dependencies]
-bamcensus-core = { path = "../bamcensus-core", version = "0.1.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
