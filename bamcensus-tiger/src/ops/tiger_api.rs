@@ -5,6 +5,7 @@ use bamcensus_core::model::identifier::GeoidType;
 use futures::{stream, StreamExt};
 use geo_types::Geometry;
 use itertools::Itertools;
+use kdam::BarExt;
 use log;
 use reqwest::Client;
 use shapefile::dbase::Record;
@@ -13,6 +14,7 @@ use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{Cursor, Read};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tokio::io::AsyncWriteExt;
 use zip::ZipArchive;
 
@@ -33,10 +35,16 @@ pub async fn run<'a>(
     let uris = builder.create_resources(geoids)?;
     let lookup = geoids.iter().collect::<HashSet<_>>();
 
+    let pb_builder = kdam::BarBuilder::default()
+        .total(uris.len())
+        .desc("TIGER/Lines downloads");
+    let pb = Arc::new(Mutex::new(pb_builder.build()?));
+
     let run_results = uris.into_iter().map(|tiger| {
         log::debug!("downloading {}", tiger.uri);
         let client = &client;
         let lookup = &lookup;
+        let pb = pb.clone();
         async move {
             let read_path = get_or_download_tiger_zip(client, &tiger.uri).await?;
 
@@ -62,6 +70,15 @@ pub async fn run<'a>(
                 .collect::<Result<Vec<_>, String>>()?;
             let result = read_result.into_iter().flatten().collect_vec();
 
+            // update progress bar
+            let mut pb_update = pb
+                .lock()
+                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
+            pb_update
+                .update(1)
+                .map_err(|e| format!("failure on pb update: {e}"))?;
+            pb_update.set_description(tiger.uri.split('/').next_back().unwrap_or_default());
+
             Ok(result)
         }
     });
@@ -69,6 +86,7 @@ pub async fn run<'a>(
         .buffer_unordered(MAX_CONCURRENT_DOWNLOADS)
         .collect::<Vec<_>>()
         .await;
+    eprintln!(); // terminate progress bar
     Ok(result)
 }
 

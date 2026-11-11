@@ -4,6 +4,7 @@ use bamcensus_core::{
     ops::agg::NumericAggregation,
 };
 use itertools::Itertools;
+use kdam::BarExt;
 use std::collections::HashMap;
 
 /// groups rows to the target Geoid hierarchy level and then
@@ -74,6 +75,14 @@ pub fn aggregate_lodes_wac(
 
     // nested groupby operation collected into a hashmap
     let mut grouped: HashMap<Geoid, HashMap<WacSegment, Vec<f64>>> = HashMap::new();
+    let n_geoid_oks = geoid_oks.len();
+    let group_iter_desc = format!("LODES - geoids to {target}");
+    let pb1_builder = kdam::BarBuilder::default()
+        .total(n_geoid_oks)
+        .desc(group_iter_desc);
+    let mut pb1 = pb1_builder
+        .build()
+        .map_err(|e| format!("error building progress bar: {e}"))?;
 
     for (geoid, values) in geoid_oks.into_iter() {
         for wac in values.iter() {
@@ -93,22 +102,37 @@ pub fn aggregate_lodes_wac(
                 }
             }
         }
+        pb1.update(1)
+            .map_err(|e| format!("error updating progress bar: {e}"))?;
     }
+    eprintln!();
 
-    // flattened into vector collection
+    // flattended into vector collection
+    let n_grouped = grouped.len();
+    let reduce_desc = format!("LODES - aggregate by {agg}");
+    let pb2_builder = kdam::BarBuilder::default()
+        .total(n_grouped)
+        .desc(reduce_desc);
+    let mut pb2 = pb2_builder
+        .build()
+        .map_err(|e| format!("error building progress bar: {e}"))?;
     let output: Result<Vec<(Geoid, Vec<WacValue>)>, String> = grouped
         .into_iter()
         .map(|(geoid, map)| {
             let values = map
                 .into_iter()
                 .map(|(seg, values)| {
+                    // let mut mut_values = values;
                     let value = agg.aggregate(&mut values.into_iter());
                     WacValue::new(seg, value)
                 })
                 .collect_vec();
+            pb2.update(1)
+                .map_err(|e| format!("error updating progress bar: {e}"))?;
             Ok((geoid, values))
         })
         .collect::<Result<Vec<_>, _>>();
+    eprintln!(); // end progress bar
 
     output
 }
