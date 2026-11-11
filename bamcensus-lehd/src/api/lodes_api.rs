@@ -1,4 +1,4 @@
-use crate::model::{FallbackPolicy, WacRow, WacSegment, WacValue};
+use crate::model::{FallbackPolicy, LodesQuery, WacRow, WacSegment, WacValue};
 use crate::ops::lodes_agg;
 use bamcensus_core::{
     model::identifier::{Geoid, GeoidType},
@@ -61,35 +61,41 @@ async fn try_fetch_lodes_data(
     Ok(Some(result))
 }
 
-/// Applies the fallback policy to a LODES URL query.
+/// Applies the fallback policy to a structured LODES query.
 ///
-/// Given a base URL that may contain `{year}` placeholder, generates alternative URLs
-/// based on the fallback policy and attempts each in sequence until one succeeds.
+/// Generates candidate years based on the fallback policy, materializes each candidate query
+/// into a URL, and attempts each in sequence until one succeeds.
 ///
 /// # Arguments
 ///
 /// * `client` - HTTP client for making requests
-/// * `base_url` - URL with `{year}` placeholder (e.g., `.../2021/...` where `2021` is the year)
-/// * `base_year` - The originally requested year
+/// * `query` - Structured LODES query with dataset parameters and state
 /// * `fallback_policy` - Policy for retry attempts
 /// * `wac_segments` - WAC segments to extract from the response
 ///
 /// # Returns
 ///
-/// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if any URL succeeds
-/// - `Ok(None)` if all URLs return 404
+/// - `Ok(Some(Vec<(Geoid, Vec<WacValue>)>))` if any candidate query succeeds
+/// - `Ok(None)` if all candidate queries are unavailable or return 404
 /// - `Err(String)` if a fatal error occurs
 async fn run_with_fallback(
     client: &Client,
-    base_url: &str,
-    base_year: u64,
+    query: &LodesQuery,
     fallback_policy: FallbackPolicy,
     wac_segments: &[WacSegment],
 ) -> Result<Option<Vec<(Geoid, Vec<WacValue>)>>, String> {
+    let base_year = query.year();
     let candidate_years = fallback_policy.candidate_years(base_year);
 
     for year in candidate_years {
-        let url = base_url.replace(&base_year.to_string(), &year.to_string());
+        let candidate_query = query.with_year(year);
+        let url = match candidate_query.to_uri() {
+            Ok(url) => url,
+            Err(_) => {
+                // Statically known unavailable state/year combination, continue to next fallback candidate
+                continue;
+            }
+        };
         match try_fetch_lodes_data(client, &url, wac_segments).await {
             Ok(Some(data)) => {
                 if year != base_year {
@@ -121,7 +127,7 @@ async fn run_with_fallback(
 /// output GeoidType, which should be
 pub async fn run_wac(
     client: &Client,
-    queries: &[String],
+    queries: &[LodesQuery],
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
@@ -140,13 +146,13 @@ pub async fn run_wac(
 /// # Arguments
 ///
 /// * `client` - HTTP client for making requests
-/// * `queries` - List of LODES URLs to fetch
+/// * `queries` - List of structured LODES queries to fetch
 /// * `wac_segments` - WAC segments to extract from each response
 /// * `agg` - Optional aggregation specification
 /// * `fallback_policy` - Policy for handling unavailable state/year combinations
 pub async fn run_wac_with_fallback(
     client: &Client,
-    queries: &[String],
+    queries: &[LodesQuery],
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
     fallback_policy: FallbackPolicy,
@@ -157,27 +163,13 @@ pub async fn run_wac_with_fallback(
         .desc("LODES downloads");
     let pb = Arc::new(Mutex::new(pb_builder.build()?));
 
-    // Extract base year from the first query URL for fallback policy
-    // URLs typically follow pattern: .../LODES/public/lodes8/2021/RI_wac_S000_JT00_2021.csv.gz
-    let extract_year =
-        |url: &str| -> Option<u64> { url.split('/').find_map(|part| part.parse::<u64>().ok()) };
-
-    let base_year = queries
-        .first()
-        .and_then(|url| extract_year(url))
-        .unwrap_or_else(|| {
-            eprintln!("warning: could not extract year from LODES URLs");
-            2021
-        });
-
     // run each query in parallel with fallback logic
-    let responses = queries.iter().map(|url| {
+    let responses = queries.iter().map(|query| {
         let client = &client;
         let wac_segments = &wac_segments;
         let pb = pb.clone();
         async move {
-            let result =
-                run_with_fallback(client, url, base_year, fallback_policy, wac_segments).await;
+            let result = run_with_fallback(client, query, fallback_policy, wac_segments).await;
 
             // update progress bar
             let _pb_update_result = pb

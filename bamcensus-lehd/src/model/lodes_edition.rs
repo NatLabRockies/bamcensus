@@ -3,7 +3,7 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Deserialize, Serialize, ValueEnum, Default, Clone, Copy, Debug)]
+#[derive(Deserialize, Serialize, ValueEnum, Default, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum LodesEdition {
     Lodes6,

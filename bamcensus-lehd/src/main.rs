@@ -68,7 +68,7 @@ async fn main() {
     let output_geoid_type = args.agg_geoid_type.unwrap_or(GeoidType::Block);
     let queries = state_codes
         .iter()
-        .map(|s| dataset.create_uri(s))
+        .map(|s| dataset.create_query(s))
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 

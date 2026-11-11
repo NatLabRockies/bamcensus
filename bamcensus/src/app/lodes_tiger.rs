@@ -88,7 +88,7 @@ pub async fn run(
     };
     let lodes_queries = geoids
         .iter()
-        .map(|geoid| dataset.create_uri(geoid))
+        .map(|geoid| dataset.create_query(geoid))
         .collect::<Result<Vec<_>, _>>()?;
 
     let agg_fn = bamcensus_core::ops::agg::NumericAggregation::Sum;
