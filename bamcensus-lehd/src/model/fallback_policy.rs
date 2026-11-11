@@ -22,9 +22,10 @@ use std::fmt;
 /// // Try 2 years back or 1 year forward
 /// let policy = FallbackPolicy::BiDirectional { past: 2, future: 1 };
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum FallbackPolicy {
     /// Do not retry; fail immediately if the requested state/year is unavailable
+    #[default]
     FailAlways,
     /// If the requested year fails, try N years earlier
     TryPreviousYears(u64),
