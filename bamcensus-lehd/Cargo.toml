@@ -17,6 +17,7 @@ flate2 = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 kdam = { workspace = true }
+log = { workspace = true }
 rayon = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

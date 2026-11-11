@@ -262,7 +262,7 @@ impl StateCode {
             StateCode::Indiana => String::from("IN"),
             StateCode::Iowa => String::from("IA"),
             StateCode::Kansas => String::from("KS"),
-            StateCode::Kentucky => String::from("Ky"),
+            StateCode::Kentucky => String::from("KY"),
             StateCode::Louisiana => String::from("LA"),
             StateCode::Maine => String::from("ME"),
             StateCode::Maryland => String::from("MD"),
@@ -409,5 +409,20 @@ impl StateCode {
             StateCode::Wisconsin => String::from("Wisconsin"),
             StateCode::Wyoming => String::from("Wyoming"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_abbreviations_are_uppercase_two_letter_codes() {
+        for sc in StateCode::ALL {
+            let abbr = sc.to_state_abbreviation();
+            assert_eq!(abbr.len(), 2);
+            assert_eq!(abbr, abbr.to_uppercase());
+        }
+        assert_eq!(StateCode::Kentucky.to_state_abbreviation(), "KY");
     }
 }

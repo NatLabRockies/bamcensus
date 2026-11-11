@@ -27,5 +27,5 @@ Homepage = "https://github.com/NREL/bamcensus"
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
-module-name = "bamcensus"
+module-name = "bamcensus_py"
 manifest-path = "Cargo.toml"

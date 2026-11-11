@@ -1,41 +1,22 @@
 use crate::model::{AcsApiQueryParams, AcsValue, DeserializeGeoidFn};
 use bamcensus_core::model::identifier::Geoid;
-use futures::future;
+use futures::{stream, StreamExt};
 use itertools::Itertools;
-use kdam::BarExt;
 use reqwest::{Client, StatusCode};
-use std::sync::{Arc, Mutex};
+
+const MAX_CONCURRENT_REQUESTS: usize = 8;
 
 /// sets up a run of ACS queries.
 pub async fn batch_run<'a>(
     client: &Client,
     queries: &Vec<AcsApiQueryParams>,
 ) -> Result<Vec<(Geoid, Vec<AcsValue>)>, String> {
-    let pb_builder = kdam::BarBuilder::default()
-        .total(queries.len())
-        .desc("ACS API calls");
-    let pb = Arc::new(Mutex::new(pb_builder.build()?));
-
-    let response = queries.iter().map(|params| {
-        let pb = pb.clone();
-        async move {
-            let desc = params.build_url()?;
-            let res = run(client, params).await;
-
-            // update progress bar
-            let mut pb_update = pb
-                .lock()
-                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
-            pb_update
-                .update(1)
-                .map_err(|e| format!("failure on pb update: {e}"))?;
-
-            pb_update.set_description(&desc);
-
-            res
-        }
+    let response = queries.iter().map(|params| async move {
+        run(client, params).await
     });
-    let result = future::join_all(response)
+    let result = stream::iter(response)
+        .buffer_unordered(MAX_CONCURRENT_REQUESTS)
+        .collect::<Vec<_>>()
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?
@@ -43,7 +24,6 @@ pub async fn batch_run<'a>(
         .flatten()
         .collect_vec();
 
-    eprintln!(); // terminate progress bar
     Ok(result)
 }
 

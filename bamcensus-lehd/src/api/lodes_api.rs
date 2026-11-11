@@ -6,11 +6,11 @@ use bamcensus_core::{
 };
 use csv::ReaderBuilder;
 use flate2::read::GzDecoder;
-use futures::future;
+use futures::{stream, StreamExt};
 use itertools::Itertools;
-use kdam::BarExt;
 use reqwest::Client;
-use std::sync::{Arc, Mutex};
+
+const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 
 /// Attempts to fetch and parse a single LODES dataset from a URL.
 ///
@@ -99,9 +99,10 @@ async fn run_with_fallback(
         match try_fetch_lodes_data(client, &url, wac_segments).await {
             Ok(Some(data)) => {
                 if year != base_year {
-                    eprintln!(
+                    log::warn!(
                         "LODES data for year {} not available; using {} instead",
-                        base_year, year
+                        base_year,
+                        year
                     );
                 }
                 return Ok(Some(data));
@@ -157,29 +158,12 @@ pub async fn run_wac_with_fallback(
     agg: Option<(GeoidType, NumericAggregation)>,
     fallback_policy: FallbackPolicy,
 ) -> Result<Vec<(Geoid, Vec<WacValue>)>, String> {
-    // setup progress bar
-    let pb_builder = kdam::BarBuilder::default()
-        .total(queries.len())
-        .desc("LODES downloads");
-    let pb = Arc::new(Mutex::new(pb_builder.build()?));
-
-    // run each query in parallel with fallback logic
+    // run each query in parallel with bounded concurrency and fallback logic
     let responses = queries.iter().map(|query| {
         let client = &client;
         let wac_segments = &wac_segments;
-        let pb = pb.clone();
         async move {
             let result = run_with_fallback(client, query, fallback_policy, wac_segments).await;
-
-            // update progress bar
-            let _pb_update_result = pb
-                .lock()
-                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))
-                .and_then(|mut pb_guard| {
-                    pb_guard
-                        .update(1)
-                        .map_err(|e| format!("failure on pb update: {e}"))
-                })?;
 
             match result? {
                 Some(data) => Ok(data),
@@ -190,10 +174,11 @@ pub async fn run_wac_with_fallback(
             }
         }
     });
-    eprintln!(); // progress bar terminated
 
     // join query result
-    let response_rows = future::join_all(responses)
+    let response_rows = stream::iter(responses)
+        .buffer_unordered(MAX_CONCURRENT_DOWNLOADS)
+        .collect::<Vec<_>>()
         .await
         .into_iter()
         .collect::<Result<Vec<_>, String>>()?

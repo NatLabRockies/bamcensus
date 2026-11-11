@@ -82,11 +82,16 @@ pub async fn run(
     // lodes data and aggregate it to some GeoidType.
     // use the LODES dataset argument to build URIs for all LODES downloads
     // if the user did not provide geoids, use all states
-    let geoids = match geoids.len() {
+    let filter_geoids = match geoids.len() {
         0 => Geoid::all_states(),
-        _ => geoids.iter().map(|g| g.to_state()).unique().collect_vec(),
+        _ => geoids.clone(),
     };
-    let lodes_queries = geoids
+    let state_geoids = filter_geoids
+        .iter()
+        .map(|g| g.to_state())
+        .unique()
+        .collect_vec();
+    let lodes_queries = state_geoids
         .iter()
         .map(|geoid| dataset.create_query(geoid))
         .collect::<Result<Vec<_>, _>>()?;
@@ -106,12 +111,9 @@ pub async fn run(
     )
     .await?;
 
-    // filter result. LODES collects by State. here we only accept rows where the
-    // input geoids are the (FIPS hierarchical) parent.
-    let lodes_filtered = lodes_rows
-        .into_iter()
-        .filter(|(c, _)| geoids.iter().any(|p| p.is_parent_of(c)))
-        .collect_vec();
+    // filter result. LODES collects by State. here we only accept rows that match
+    // the input geoids or where the input geoids are the (FIPS hierarchical) parent.
+    let lodes_filtered = filter_rows_by_geoids(lodes_rows, &filter_geoids);
 
     // execute TIGER/Lines downloads selecting a data vintage based on the LODES edition chosen
     let tiger_year = dataset.tiger_year();
@@ -140,4 +142,59 @@ pub async fn run(
         join_errors,
     };
     Ok(result)
+}
+
+fn filter_rows_by_geoids<T>(
+    rows: Vec<(Geoid, Vec<T>)>,
+    filter_geoids: &[Geoid],
+) -> Vec<(Geoid, Vec<T>)> {
+    rows.into_iter()
+        .filter(|(c, _)| filter_geoids.iter().any(|p| p == c || p.is_parent_of(c) || c.is_parent_of(p)))
+        .collect_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bamcensus_core::model::identifier::fips;
+    use bamcensus_lehd::model::WacValue;
+
+    #[test]
+    fn test_filter_rows_by_geoids_keeps_only_requested_county() {
+        let rows = vec![
+            (
+                Geoid::CensusTract(fips::State(8), fips::County(31), fips::CensusTract(100)),
+                vec![WacValue::new(WacSegment::C000, 10.0)],
+            ),
+            (
+                Geoid::CensusTract(fips::State(8), fips::County(59), fips::CensusTract(200)),
+                vec![WacValue::new(WacSegment::C000, 20.0)],
+            ),
+        ];
+        let filter_geoids = vec![Geoid::County(fips::State(8), fips::County(31))];
+        let filtered = filter_rows_by_geoids(rows, &filter_geoids);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0].0,
+            Geoid::CensusTract(fips::State(8), fips::County(31), fips::CensusTract(100))
+        );
+    }
+
+    #[test]
+    fn test_filter_rows_by_geoids_supports_same_level_state_aggregation() {
+        let rows = vec![
+            (
+                Geoid::State(fips::State(8)),
+                vec![WacValue::new(WacSegment::C000, 100.0)],
+            ),
+            (
+                Geoid::State(fips::State(6)),
+                vec![WacValue::new(WacSegment::C000, 200.0)],
+            ),
+        ];
+        let filter_geoids = vec![Geoid::State(fips::State(8))];
+        let filtered = filter_rows_by_geoids(rows, &filter_geoids);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, Geoid::State(fips::State(8)));
+    }
 }

@@ -4,8 +4,8 @@ use bamcensus_lehd::model::{
     FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
 };
 use itertools::Itertools;
-use pyo3::types::IntoPyDict;
 use pyo3::types::PyDict;
+use pyo3::types::PyList;
 use pyo3::{exceptions::PyException, prelude::*};
 use serde::de;
 use std::str::FromStr;
@@ -18,33 +18,53 @@ pub fn run_wac_tiger_python<'a>(
     year: u64,
     kwds: Option<&Bound<'a, PyDict>>,
     py: Python<'a>,
-) -> PyResult<pyo3::Bound<'a, PyDict>> {
-    let dataset_result: Result<LodesDataset, PyErr> = kwds
-        .map(|m| {
-            if m.contains("edition")? && m.contains("job_type")? && m.contains("segment")? {
-                let edition: LodesEdition = get_string_deserializable("edition", m)?;
-                let job_type: LodesJobType = get_string_deserializable("job_type", m)?;
-                let segment: WorkplaceSegment = get_string_deserializable("segment", m)?;
-                let dataset = LodesDataset::WAC {
-                    edition,
-                    job_type,
-                    segment,
-                    year,
-                };
-                Ok(dataset)
-            } else {
-                Ok(LodesDataset::default())
-            }
-        })
-        .unwrap_or_else(|| Ok(LodesDataset::default()));
-    let dataset = dataset_result?;
+) -> PyResult<pyo3::Bound<'a, PyList>> {
+    let edition = kwds.map_or(Ok(LodesEdition::default()), |m| {
+        if m.contains("edition")? {
+            get_string_deserializable("edition", m)
+        } else {
+            Ok(LodesEdition::default())
+        }
+    })?;
+    let job_type = kwds.map_or(Ok(LodesJobType::default()), |m| {
+        if m.contains("job_type")? {
+            get_string_deserializable("job_type", m)
+        } else if m.contains("jobtype")? {
+            get_string_deserializable("jobtype", m)
+        } else {
+            Ok(LodesJobType::default())
+        }
+    })?;
+    let segment = kwds.map_or(Ok(WorkplaceSegment::default()), |m| {
+        if m.contains("segment")? {
+            get_string_deserializable("segment", m)
+        } else {
+            Ok(WorkplaceSegment::default())
+        }
+    })?;
+    let dataset = LodesDataset::WAC {
+        edition,
+        job_type,
+        segment,
+        year,
+    };
 
-    let geoids_string: String = kwds.map_or(Ok(String::from("")), |m| get_string("geoids", m))?;
-    let geoids = geoids_string
-        .split(',')
-        .map(Geoid::try_from)
-        .collect::<Result<Vec<_>, String>>()
-        .map_err(|e| PyException::new_err(format!("failure decoding geoids argument: {e}")))?;
+    let geoids_string: String = kwds.map_or(Ok(String::from("")), |m| {
+        if m.contains("geoids")? {
+            get_string("geoids", m)
+        } else {
+            Ok(String::from(""))
+        }
+    })?;
+    let geoids = if geoids_string.trim().is_empty() {
+        vec![]
+    } else {
+        geoids_string
+            .split(',')
+            .map(|s| Geoid::try_from(s.trim()))
+            .collect::<Result<Vec<_>, String>>()
+            .map_err(|e| PyException::new_err(format!("failure decoding geoids argument: {e}")))?
+    };
     let wac_segments = kwds.map_or(Ok(vec![WacSegment::C000]), |m| {
         if m.contains("wac_segments")? {
             get_comma_separated("wac_segments", m)
@@ -55,6 +75,8 @@ pub fn run_wac_tiger_python<'a>(
     let wildcard = kwds.map_or(Ok(None), |m| {
         if m.contains("wildcard")? {
             get_string_deserializable("wildcard", m).map(Some)
+        } else if m.contains("output_resolution")? {
+            get_string_deserializable("output_resolution", m).map(Some)
         } else {
             Ok(None)
         }
@@ -94,14 +116,15 @@ pub fn run_wac_tiger_python<'a>(
         .into_iter()
         .map(|row| {
             let dict = PyDict::new_bound(py);
+            dict.set_item("geoid", row.geoid.to_string())?;
             dict.set_item("segment", row.value.segment.to_string())?;
             dict.set_item("value", row.value.value)?;
             dict.set_item("geometry", row.geometry.to_wkt().to_string())?;
-            Ok((row.geoid.to_string(), dict.to_object(py)))
+            Ok(dict)
         })
         .collect::<PyResult<Vec<_>>>()?;
-    let out_dict = vals.into_py_dict_bound(py);
-    Ok(out_dict)
+    let out_list = PyList::new_bound(py, vals);
+    Ok(out_list)
 }
 
 fn get_comma_separated<T>(key: &str, map: &Bound<'_, PyDict>) -> PyResult<Vec<T>>
@@ -112,7 +135,9 @@ where
     let result = ss
         .split(',')
         .map(|s| {
-            serde_json::from_str(s)
+            let trimmed = s.trim();
+            serde_json::from_str(trimmed)
+                .or_else(|_| serde_json::from_value(serde_json::Value::String(trimmed.to_string())))
                 .map_err(|e| format!("failure decoding comma-separated arguments in '{key}': {e}"))
         })
         .collect::<Result<Vec<T>, String>>();
@@ -141,20 +166,14 @@ fn get_string_deserializable<T>(key: &str, map: &Bound<'_, PyDict>) -> PyResult<
 where
     T: de::DeserializeOwned,
 {
-    let item_opt = map
-        .get_item(key)
-        .map_err(|e| PyException::new_err(format!("failure retreiving key {key}: {e}")))?;
-    let item = match item_opt {
-        None => Err(PyException::new_err(format!("key {key} not present"))),
-        Some(item) => Ok(item),
-    }?;
-    let string: String = item
-        .extract()
-        .map_err(|e| PyException::new_err(format!("value at {key} is not string. error: {e}")))?;
-    let t: T = serde_json::from_str(string.as_str()).map_err(|e| {
-        PyException::new_err(format!(
-            "failure decoding '{key}' argument from string '{string}': {e}"
-        ))
-    })?;
+    let string = get_string(key, map)?;
+    let trimmed = string.trim();
+    let t: T = serde_json::from_str(trimmed)
+        .or_else(|_| serde_json::from_value(serde_json::Value::String(trimmed.to_string())))
+        .map_err(|e| {
+            PyException::new_err(format!(
+                "failure decoding '{key}' argument from string '{string}': {e}"
+            ))
+        })?;
     Ok(t)
 }

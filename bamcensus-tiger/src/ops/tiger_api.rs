@@ -2,20 +2,21 @@ use crate::model::TigerResource;
 use crate::model::TigerResourceBuilder;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
-use futures::StreamExt;
+use futures::{stream, StreamExt};
 use geo_types::Geometry;
 use itertools::Itertools;
-use kdam::BarExt;
 use log;
 use reqwest::Client;
 use shapefile::dbase::Record;
 use shapefile::{dbase, Shape, ShapeReader};
 use std::collections::HashSet;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{Cursor, Read};
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 use tokio::io::AsyncWriteExt;
 use zip::ZipArchive;
+
+const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 
 /// runs as many downloads of TIGER/Lines files as needed to cover
 /// the target geoids. return only rows matching the requested geoids.
@@ -32,68 +33,88 @@ pub async fn run<'a>(
     let uris = builder.create_resources(geoids)?;
     let lookup = geoids.iter().collect::<HashSet<_>>();
 
-    let pb_builder = kdam::BarBuilder::default()
-        .total(uris.len())
-        .desc("TIGER/Lines downloads");
-    let pb = Arc::new(Mutex::new(pb_builder.build()?));
+    let run_results = uris.into_iter().map(|tiger| {
+        log::debug!("downloading {}", tiger.uri);
+        let client = &client;
+        let lookup = &lookup;
+        async move {
+            let read_path = get_or_download_tiger_zip(client, &tiger.uri).await?;
 
-    let run_results = uris
-        .into_iter()
-        .map(|tiger| {
-            log::debug!("downloading {}", tiger.uri);
-            let client = &client;
-            let lookup = &lookup;
-            let pb = pb.clone();
-            async move {
-                // create temporary file for writing .zip download
-                let named_tmp = tempfile::NamedTempFile::new()
-                    .map_err(|e| format!("failure creating temporary zip archive filepath: {e}"))?;
-                let read_path = named_tmp.path().to_path_buf().clone();
+            // unpack archive
+            let read_file = File::open(&read_path).map_err(|e| {
+                format!("failure opening temporary zip archive file location: {e}")
+            })?;
+            let mut z = ZipArchive::new(read_file)
+                .map_err(|e| format!("failure reading temporary zip archive: {e}"))?;
+            let shp_filename = get_zip_filename(&z, ".shp")?;
+            let dbf_filename = get_zip_filename(&z, ".dbf")?;
+            let shp_contents = zip_file_into_string(&mut z, &shp_filename)?;
+            let dbf_contents = zip_file_into_string(&mut z, &dbf_filename)?;
 
-                // download archive
-                let write_file = File::create(&read_path)
-                    .map_err(|e| format!("failure creating temporary zip archive file: {e}"))?;
-                download(client, &tiger.uri, write_file).await?;
+            // read shapes and records
+            let mut reader = create_shapefile_reader(&shp_contents, &dbf_contents)?;
+            let read_result = reader
+                .iter_shapes_and_records()
+                .map(|row| {
+                    let (shape, record) = row
+                        .map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
+                    into_geoid_and_geometry(shape, record, lookup, &tiger)
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let result = read_result.into_iter().flatten().collect_vec();
 
-                // unpack archive
-                let read_file = File::open(&read_path).map_err(|e| {
-                    format!("failure opening temporary zip archive file location: {e}")
-                })?;
-                let mut z = ZipArchive::new(read_file)
-                    .map_err(|e| format!("failure reading temporary zip archive: {e}"))?;
-                let shp_filename = get_zip_filename(&z, ".shp")?;
-                let dbf_filename = get_zip_filename(&z, ".dbf")?;
-                let shp_contents = zip_file_into_string(&mut z, &shp_filename)?;
-                let dbf_contents = zip_file_into_string(&mut z, &dbf_filename)?;
-
-                // read shapes and records
-                let mut reader = create_shapefile_reader(&shp_contents, &dbf_contents)?;
-                let read_result = reader
-                    .iter_shapes_and_records()
-                    .map(|row| {
-                        let (shape, record) = row
-                            .map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
-                        into_geoid_and_geometry(shape, record, lookup, &tiger)
-                    })
-                    .collect::<Result<Vec<_>, String>>()?;
-                let result = read_result.into_iter().flatten().collect_vec();
-
-                // update progress bar
-                let mut pb_update = pb
-                    .lock()
-                    .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
-                pb_update
-                    .update(1)
-                    .map_err(|e| format!("failure on pb update: {e}"))?;
-                pb_update.set_description(tiger.uri.split('/').next_back().unwrap_or_default());
-
-                Ok(result)
-            }
-        })
-        .collect::<Vec<_>>();
-    let result = futures::future::join_all(run_results).await;
-    eprintln!(); // terminate progress bar
+            Ok(result)
+        }
+    });
+    let result = stream::iter(run_results)
+        .buffer_unordered(MAX_CONCURRENT_DOWNLOADS)
+        .collect::<Vec<_>>()
+        .await;
     Ok(result)
+}
+
+async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<PathBuf, String> {
+    if let Some(cache_path) = tiger_cache_path(uri) {
+        if cache_path.exists() {
+            log::debug!("using cached TIGER archive {}", cache_path.display());
+            return Ok(cache_path);
+        }
+        if let Some(parent) = cache_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let tmp_path = cache_path.with_extension("zip.part");
+        if let Ok(write_file) = File::create(&tmp_path) {
+            download(client, uri, write_file).await?;
+            fs::rename(&tmp_path, &cache_path)
+                .map_err(|e| format!("failure moving cached zip file into place: {e}"))?;
+            return Ok(cache_path);
+        }
+    }
+
+    let named_tmp = tempfile::NamedTempFile::new()
+        .map_err(|e| format!("failure creating temporary zip archive filepath: {e}"))?;
+    let (_, read_path) = named_tmp
+        .keep()
+        .map_err(|e| format!("failure persisting temporary zip archive file: {e}"))?;
+    let write_file = File::create(&read_path)
+        .map_err(|e| format!("failure creating temporary zip archive file: {e}"))?;
+    download(client, uri, write_file).await?;
+    Ok(read_path)
+}
+
+fn tiger_cache_path(uri: &str) -> Option<PathBuf> {
+    let base_dir = std::env::var_os("BAMCENSUS_CACHE_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .or_else(|| std::env::var_os("USERPROFILE"))
+                .map(|home| PathBuf::from(home).join(".cache").join("bamcensus"))
+        })?;
+    let relative = uri
+        .strip_prefix(TigerResourceBuilder::TIGER_BASE_URL)
+        .unwrap_or(uri)
+        .trim_start_matches('/');
+    Some(base_dir.join("tiger").join(relative))
 }
 
 fn into_geoid_and_geometry(

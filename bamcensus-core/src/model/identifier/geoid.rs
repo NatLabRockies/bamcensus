@@ -154,6 +154,16 @@ impl Geoid {
             (Geoid::CensusTract(s1, c1, t1), Geoid::Block(s2, c2, t2, _)) => {
                 s1 == s2 && c1 == c2 && t1 == t2
             }
+            (Geoid::BlockGroup(s1, c1, t1, bg1), Geoid::Block(s2, c2, t2, b2)) => {
+                s1 == s2
+                    && c1 == c2
+                    && t1 == t2
+                    && b2
+                        .0
+                        .get(0..1)
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map_or(false, |bg2| bg1.0 == bg2)
+            }
             _ => false,
         }
     }
@@ -275,5 +285,35 @@ impl HasGeoidString for Geoid {
 impl Display for Geoid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}={}", self.variant_name(), self.geoid_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_block_group_is_parent_of_block() {
+        let bg = Geoid::BlockGroup(
+            fips::State(8),
+            fips::County(59),
+            fips::CensusTract(100),
+            fips::BlockGroup(2),
+        );
+        let matching_block = Geoid::Block(
+            fips::State(8),
+            fips::County(59),
+            fips::CensusTract(100),
+            fips::Block(String::from("2001")),
+        );
+        let non_matching_block = Geoid::Block(
+            fips::State(8),
+            fips::County(59),
+            fips::CensusTract(100),
+            fips::Block(String::from("1001")),
+        );
+
+        assert!(bg.is_parent_of(&matching_block));
+        assert!(!bg.is_parent_of(&non_matching_block));
     }
 }
