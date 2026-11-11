@@ -82,7 +82,7 @@ lodes_tiger_app wac \
 ### Python API
 
 ```python
-from bamcensus import run_wac_tiger_python
+from bamcensus_py import run_wac_tiger_python
 
 # Try 2 years back if the requested year is unavailable
 result = run_wac_tiger_python(
