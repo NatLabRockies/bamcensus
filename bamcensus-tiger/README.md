@@ -1,6 +1,6 @@
 # bamcensus-tiger
 
-Tooling to support batch geospatial data collection from the US Census [TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) archive, as part of the [`bamcensus`](https://github.com/NREL/bamcensus) workspace.
+Tooling to support batch geospatial data collection from the US Census [TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) archive, as part of the [`bamcensus`](https://github.com/NLR/bamcensus) workspace.
 
 ## Overview
 

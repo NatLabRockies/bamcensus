@@ -1,6 +1,6 @@
 # bamcensus-core
 
-Core types, identifiers, and numeric aggregation operations shared across the [`bamcensus`](https://github.com/NREL/bamcensus) workspace.
+Core types, identifiers, and numeric aggregation operations shared across the [`bamcensus`](https://github.com/NLR/bamcensus) workspace.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # bamcensus-py
 
-Python bindings for [`bamcensus`](https://github.com/NREL/bamcensus), built with [PyO3](https://pyo3.rs/) and [Maturin](https://www.maturin.rs/), returning Census + TIGER/Line results directly as `geopandas.GeoDataFrame` objects.
+Python bindings for [`bamcensus`](https://github.com/NLR/bamcensus), built with [PyO3](https://pyo3.rs/) and [Maturin](https://www.maturin.rs/), returning Census + TIGER/Line results directly as `geopandas.GeoDataFrame` objects.
 
 ## Installation
 
