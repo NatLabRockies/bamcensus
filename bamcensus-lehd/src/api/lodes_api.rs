@@ -188,7 +188,10 @@ pub async fn run_wac_with_fallback(
                 None if fallback_policy == FallbackPolicy::FailAlways => {
                     Err(format!("LODES data not available for {query}"))
                 }
-                None => Ok(Vec::new()),
+                None => {
+                    eprintln!("LODES data not available for {query} after exhausting fallback years; skipping");
+                    Ok(Vec::new())
+                }
             }
         }
     });
