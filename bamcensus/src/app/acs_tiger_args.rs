@@ -1,16 +1,16 @@
-use super::acs_tiger;
+use super::acs_tiger::{self, AcsRegionQueryParams};
+use super::region_args::RegionCliArgs;
 use crate::model::acs_tiger_output_row::AcsTigerOutputRow;
-use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType};
-use bamcensus_core::model::identifier::{Geoid, GeoidType};
+use bamcensus_acs::model::AcsType;
+use bamcensus_core::model::identifier::GeoidType;
 use clap::Parser;
 use itertools::Itertools;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct AcsTigerAppCli {
-    /// geoid or comma-delimited list of geoids
-    #[arg(short, long, alias = "geoid")]
-    pub geoids: String,
+    #[command(flatten)]
+    pub region: RegionCliArgs,
     /// produce output rows at the given geospatial resolution. original resolution if not specified.
     #[arg(short, long, alias = "aggregation")]
     pub output_resolution: Option<GeoidType>,
@@ -24,7 +24,7 @@ pub struct AcsTigerAppCli {
     #[arg(short, long)]
     pub acs_type: AcsType,
     /// if provided, token for ACS API (to avoid public rate limits)
-    #[arg(short, long)]
+    #[arg(short = 't', long)]
     pub acs_token: Option<String>,
     /// path and file to write result. if not provided, will use a concatenation of the CLI arguments
     #[arg(long)]
@@ -34,28 +34,19 @@ pub struct AcsTigerAppCli {
 impl AcsTigerAppCli {
     pub async fn run(&self) {
         let acs_get_query = self.acs_query.split(',').map(String::from).collect_vec();
-        let geoids = self
-            .geoids
-            .split(',')
-            .map(|s| Geoid::try_from(s.trim()))
-            .collect::<Result<Vec<Geoid>, _>>()
+        let region = self
+            .region
+            .to_region_filter(self.output_resolution, false)
             .unwrap();
-        let queries = geoids
-            .into_iter()
-            .map(|geoid| {
-                let query: AcsGeoidQuery = AcsGeoidQuery::new(Some(geoid), self.output_resolution)?;
-                let query_params = AcsApiQueryParams::new(
-                    None,
-                    self.year,
-                    self.acs_type,
-                    acs_get_query.clone(),
-                    query,
-                    self.acs_token.clone(),
-                );
-                Ok(query_params)
-            })
-            .collect::<Result<Vec<_>, String>>()
-            .unwrap();
+        let params = AcsRegionQueryParams {
+            base_url: None,
+            year: self.year,
+            acs_type: self.acs_type,
+            acs_get_query,
+            region,
+            output_resolution: self.output_resolution,
+            acs_token: self.acs_token.clone(),
+        };
 
         let res_msg = match self.output_resolution {
             Some(res) => res.to_string(),
@@ -65,7 +56,7 @@ impl AcsTigerAppCli {
             None => format!("{}-{}-{}.csv", self.year, self.acs_type, res_msg),
             Some(f) => f.clone(),
         };
-        let res = acs_tiger::run_batch(&queries).await.unwrap();
+        let res = acs_tiger::run_region(&params).await.unwrap();
         let total_errors = res.tiger_errors.len() + res.join_errors.len();
         println!(
             "found {} responses, {} errors",
@@ -91,5 +82,36 @@ impl AcsTigerAppCli {
             let out_row = AcsTigerOutputRow::from(row);
             writer.serialize(out_row).unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_rejects_conflicting_geoids_and_polygon_and_missing_polygon_resolution() {
+        assert!(AcsTigerAppCli::try_parse_from([
+            "acs_tiger_app",
+            "--geoids=08031",
+            "--polygon=POLYGON ((-105 39, -104 39, -104 40, -105 40, -105 39))",
+            "--year=2020",
+            "--acs-query=NAME",
+            "--acs-type=five-year",
+        ])
+        .is_err());
+
+        let parsed = AcsTigerAppCli::try_parse_from([
+            "acs_tiger_app",
+            "--polygon=POLYGON ((-105 39, -104 39, -104 40, -105 40, -105 39))",
+            "--year=2020",
+            "--acs-query=NAME",
+            "--acs-type=five-year",
+        ])
+        .unwrap();
+        assert!(parsed
+            .region
+            .to_region_filter(parsed.output_resolution, false)
+            .is_err());
     }
 }

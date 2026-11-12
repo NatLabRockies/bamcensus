@@ -60,7 +60,6 @@ inputs must be topologically valid, with antimeridian-crossing polygons split
 at the antimeridian. Predicates, including area overlap, are planar in
 longitude/latitude rather than equal-area or geodesic. See the
 [TIGER README](../bamcensus-tiger/README.md) for parsing and predicate details.
-Polygon input is currently available through the Rust APIs, not the CLI or Python APIs.
 
 ## Installation
 
@@ -72,32 +71,35 @@ cargo build -r
 
 ## CLI Usage
 
-You can run workflows either through the unified `bamcensus` binary (`bamcensus acs ...` / `bamcensus lehd lodes wac ...`) or via the standalone `acs_tiger_app` and `lodes_tiger_app` binaries.
+You can run workflows either through the unified `bamcensus` binary (`bamcensus acs ...` / `bamcensus lehd lodes wac ...` / `bamcensus tiger ...`) or via the standalone `acs_tiger_app` and `lodes_tiger_app` binaries.
 
 ### Output Resolution Semantics (`--output-resolution`)
 
 Valid `GeoidType` values for `--output-resolution`:
 `state`, `county`, `county-subdivision`, `place`, `census-tract`, `block-group`, `block` (note: ACS does not support `block`).
 
-- **In ACS (`acs_tiger_app`)**: `--output-resolution` specifies the Census API wildcard level (`for=<resolution>:*`) within the parent `--geoids`. If omitted, queries the exact `--geoids` provided.
-- **In LODES (`lodes_tiger_app`)**: Raw LODES data is downloaded at the Census Block level for each relevant state, filtered to the input `--geoids`, and aggregated by summing values up to `--output-resolution` before joining with TIGER/Line geometries.
+- **In ACS (`acs_tiger_app`)**: `--output-resolution` specifies the Census API wildcard level (`for=<resolution>:*`) within the parent `--geoids` (or the target geography resolution when querying with `--polygon`).
+- **In LODES (`lodes_tiger_app`)**: Raw LODES data is downloaded at the Census Block level for each relevant state, filtered to the input `--geoids` or `--polygon`, and aggregated by summing values up to `--output-resolution` before joining with TIGER/Line geometries.
 
 ---
 
 ### `acs_tiger_app` (or `bamcensus acs`)
 
-Queries American Community Survey (ACS) data and joins it with TIGER/Line geometries for the specified GEOIDs.
+Queries American Community Survey (ACS) data and joins it with TIGER/Line geometries for the specified GEOIDs or polygonal study region.
 
 **Arguments:**
-- `--geoids` (required, alias `--geoid`): Comma-separated list of GEOIDs (e.g., `08031,08059`).
-- `--output-resolution` (optional, alias `--aggregation`): Geospatial resolution for output (e.g., `census-tract`, `county`). Uses the resolution of each input GEOID if omitted.
+- `--geoids` (alias `--geoid`, mutually exclusive with `--polygon`): Comma-separated list of GEOIDs (e.g., `08031,08059`).
+- `--polygon` (mutually exclusive with `--geoids`): Inline WKT/GeoJSON string or path to a `.wkt`, `.geojson`, `.json`, or `.shp` file. Requires `--output-resolution`.
+- `--spatial-predicate` (optional): `intersects` (default), `centroid-within`, `within`, or `area-overlap[:fraction]`.
+- `--min-overlap` (optional): Overlap threshold in `(0, 1]` when `--spatial-predicate=area-overlap`.
+- `--output-resolution` (optional for `--geoids`, required for `--polygon`; alias `--aggregation`): Geospatial resolution for output (e.g., `census-tract`, `county`).
 - `--year` (required): Year of ACS and TIGER/Line data.
 - `--acs-query` (required): Comma-separated ACS variables to retrieve (e.g., `NAME,B01001_001E`).
 - `--acs-type` (required): `one-year` or `five-year` estimates.
 - `--acs-token` (optional): API token for the Census ACS API.
 - `--output-file` (optional): Output CSV file path (default: `<year>-<acs_type>-<resolution>.csv`).
 
-**Example:**
+**Examples:**
 ```sh
 ./target/release/acs_tiger_app \
   --geoids=08031,08059 \
@@ -106,6 +108,15 @@ Queries American Community Survey (ACS) data and joins it with TIGER/Line geomet
   --acs-type=five-year \
   --output-resolution=census-tract \
   --output-file=output.csv
+
+./target/release/bamcensus acs \
+  --polygon="POLYGON ((-104.99 39.74, -104.98 39.74, -104.98 39.75, -104.99 39.75, -104.99 39.74))" \
+  --spatial-predicate=intersects \
+  --year=2020 \
+  --acs-query=NAME,B01001_001E \
+  --acs-type=five-year \
+  --output-resolution=census-tract \
+  --output-file=polygon_acs.csv
 ```
 
 ---
@@ -118,7 +129,10 @@ Queries LEHD Origin-Destination Employment Statistics (LODES) data, aggregates b
 - `wac`: Workplace Area Characteristics (WAC) data.
 
 **WAC Arguments:**
-- `--geoids` (optional): Comma-separated list of GEOIDs (defaults to all US states + DC).
+- `--geoids` (optional, mutually exclusive with `--polygon`): Comma-separated list of GEOIDs (defaults to all US states + DC if neither `--geoids` nor `--polygon` is supplied).
+- `--polygon` (optional, mutually exclusive with `--geoids`): Inline WKT/GeoJSON string or path to a `.wkt`, `.geojson`, `.json`, or `.shp` file.
+- `--spatial-predicate` (optional): `intersects` (default), `centroid-within`, `within`, or `area-overlap[:fraction]`.
+- `--min-overlap` (optional): Overlap threshold in `(0, 1]` when `--spatial-predicate=area-overlap`.
 - `--output-resolution` (optional): Target `GeoidType` aggregation level (e.g., `county`, `census-tract`; defaults to `block`).
 - `--year` (required): Year of LODES data.
 - `--wac-segments` (optional): Comma-separated WAC segments (default: `C000` for total jobs).
@@ -135,6 +149,20 @@ Queries LEHD Origin-Destination Employment Statistics (LODES) data, aggregates b
   --output-resolution=census-tract \
   --wac-segments=C000 \
   --fallback=try_2_years_back
+```
+
+---
+
+### `bamcensus tiger`
+
+Resolves a polygon directly to matching TIGER/Line GEOIDs (and optional WKT geometries) without running an ACS or LODES query.
+
+```sh
+./target/release/bamcensus tiger \
+  --polygon="POLYGON ((-104.99 39.74, -104.98 39.74, -104.98 39.75, -104.99 39.75, -104.99 39.74))" \
+  --year=2020 \
+  --output-resolution=census-tract \
+  --spatial-predicate=centroid-within
 ```
 
 ## TIGER/Line Shapefile Caching

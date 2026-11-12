@@ -33,6 +33,7 @@ gdf = bamcensus.run_acs_tiger(
 
 ```python
 import bamcensus
+from shapely.geometry import box
 
 # Query 2020 LODES Workplace Area Characteristics (WAC) total jobs (C000),
 # aggregated from census blocks to census tracts for Jefferson and Ouray counties
@@ -42,6 +43,25 @@ gdf = bamcensus.run_wac_tiger(
     output_resolution="census_tract",  # or wildcard="census_tract"
     wac_segments="C000",
     fallback_policy="try_2_years_back",
+)
+
+# Query by polygon (accepts Shapely geometry, GeoDataFrame/GeoSeries in any CRS,
+# GeoJSON dict, or WKT/GeoJSON/Shapefile path)
+study_area = box(-104.99, 39.74, -104.98, 39.75)
+gdf_poly = bamcensus.run_wac_tiger(
+    year=2021,
+    polygon=study_area,
+    spatial_predicate="intersects",  # or "centroid_within", "within", "area_overlap:0.5"
+    output_resolution="census_tract",
+    wac_segments="C000",
+)
+
+# Standalone polygon-to-GEOID lookup
+tract_geoids = bamcensus.resolve_geoids(
+    year=2020,
+    polygon=study_area,
+    output_resolution="census_tract",
+    spatial_predicate="centroid_within",
 )
 ```
 
