@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 license = "BSD-3-Clause"
 readme = "README.md"
-repository = "https://github.com/NREL/bamcensus-py"
+repository = "https://github.com/NLR/bamcensus"
 documentation = "https://docs.rs/bamcensus-py"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

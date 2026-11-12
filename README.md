@@ -4,32 +4,58 @@
   </a>
 </div>
 
-# BAMCensus - The Behavior and Advanced Mobility Census dataset aggregator
-A tool for downloading large scale geospatial datasets written in Rust. 
+# BAMCensus - The Behavior and Advanced Mobility Census Dataset Aggregator
+A high-performance toolkit written in Rust for downloading, aggregating, and spatially joining large-scale US Census datasets.
 
-This software is a high-performance tool developed in Rust for downloading and processing large-scale geospatial datasets, specifically focusing on US Census data. It is designed to address scaling limitations found in existing tools, such as R's [tidycensus](https://walker-data.com/tidycensus/), by providing performant streaming dataset JOIN operations between various US Census datasets (like ACS and LEHD) and their corresponding geometries stored on the TIGER/Lines web server.
+`bamcensus` addresses scaling limitations found in existing tools, such as R's [tidycensus](https://walker-data.com/tidycensus/), by providing concurrent batch downloads, hierarchical GEOID aggregation, and geometry joins between US Census tabular datasets (ACS and LEHD/LODES) and their corresponding geometries hosted on the Census TIGER/Line servers.
 
-The tool automates the process of joining these data sources, returning aggregated data to the user based on a specified census GEOID type. Its primary motivation stems from the need for a high-performance solution to combine spatial datasets with graph traversals within the context of mobility analysis tooling being developed at NREL's Behavior and Advanced Mobility (BAM) group.
+Its primary motivation stems from the need for a high-performance solution to combine spatial Census datasets with graph traversals within the context of mobility analysis tooling being developed at NLR's Behavior and Advanced Mobility (BAM) group.
 
-Key features and design considerations include:
+## Key Features
 
-    - Extensible Algebraic Data Types (ADTs) for representing Census, ACS, LEHD, FIPS, and TIGRIS taxonomies.
-    - The option to join census datasets with their geometry files, with optional typing provided by the Rust geo-types library.
-    - A Rust API for programmatic use, offering lazy in-memory results.
-    - A command-line interface (CLI) for batch downloading and file system downloads.
+- **Extensible Algebraic Data Types (ADTs)** for representing Census, ACS, LEHD/LODES, FIPS, and TIGER/Line taxonomies.
+- **Automated TIGER/Line Geometry Joins** with geometries typed via `geo-types` and exported as WKT or `geopandas.GeoDataFrame`.
+- **Local TIGER/Line Caching** (`~/.cache/bamcensus/tiger/` or `$BAMCENSUS_CACHE_DIR`) to avoid redundant shapefile downloads across runs.
+- **Configurable LODES Year Fallback Policies** to handle state/year coverage gaps in LEHD datasets (see [LODES Fallback Policy](./docs/content/LODES_fallback_policy.md)).
+- **Multiple Interfaces**:
+  - Command-Line Interface (CLI) for batch downloading and CSV export
+  - Rust library crates for programmatic workflows
+  - Python bindings (`bamcensus-py`) returning `geopandas.GeoDataFrame` objects
+
+## Workspace Crates
+
+| Crate | Description |
+| --- | --- |
+| [`bamcensus`](./bamcensus/) | End-to-end ACS + TIGER and LODES + TIGER workflows and CLI binaries (`bamcensus`, `acs_tiger_app`, `lodes_tiger_app`) |
+| [`bamcensus-core`](./bamcensus-core/) | Core FIPS/GEOID hierarchy models, state codes, and numeric aggregation traits |
+| [`bamcensus-acs`](./bamcensus-acs/) | American Community Survey (ACS) 1-Year and 5-Year API query builders, client, and aggregators |
+| [`bamcensus-lehd`](./bamcensus-lehd/) | LEHD Origin-Destination Employment Statistics (LODES) query builders, fallback policies, and block-to-parent aggregators |
+| [`bamcensus-tiger`](./bamcensus-tiger/) | TIGER/Line shapefile resource resolution (2010–2020+ vintages), downloader, and shapefile parser |
+| [`bamcensus-py`](./bamcensus-py/) | PyO3/Maturin Python bindings exposing `run_acs_tiger` and `run_wac_tiger` with `geopandas` integration |
+
+## Geographic Resolution vs. Wildcard Semantics
+
+Across the CLI, Rust API, and Python API, you specify:
+1. **Input Region (`geoids`)**: One or more parent or target GEOIDs (e.g., `08` for Colorado, or `08031,08059` for Denver and Jefferson counties).
+2. **Output Resolution (`--output-resolution` / `wildcard`)**: The target `GeoidType` granularity (`state`, `county`, `county_subdivision`, `place`, `census_tract`, `block_group`, `block`) for the returned rows and TIGER geometries:
+   - **In ACS workflows**: Output resolution acts as a **server-side wildcard** (`for=<output_resolution>:*&in=...`) in the Census REST API query, returning estimates directly at the requested geography level.
+   - **In LODES workflows**: Raw LODES files are always published by state at the **Census Block** level. When an output resolution (such as `census_tract` or `county`) is specified, `bamcensus` downloads the state LODES file, filters to blocks within the input `geoids`, **truncates block GEOIDs to the target parent `GeoidType`**, and aggregates job counts client-side before joining with TIGER/Line geometries at that resolution.
 
 ## Usage
 
-See the [bamcensus](/bamcensus/) crate for command line usage.
+- **CLI & Rust API**: See [`bamcensus/README.md`](./bamcensus/README.md)
+- **Python API**: See [`bamcensus-py/README.md`](./bamcensus-py/README.md) and the notebooks in [`examples/`](./examples/)
+- **LODES Fallback Policies**: See [`docs/content/LODES_fallback_policy.md`](./docs/content/LODES_fallback_policy.md)
 
 ## Roadmap
 
-  - [ ] open source release of beta version
-  - [ ] Python API
+  - [x] open source release of beta version
+  - [x] Python API (`bamcensus-py`)
   - [ ] readthedocs documentation
   - [ ] R API
   - [ ] macro-driven compilation of annual data schemas
   - [ ] support for OD + RAC LEHD datasets
+  - [ ] polygon-to-GEOID spatial query filtering
 
 ## License
 

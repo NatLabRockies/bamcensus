@@ -1,10 +1,12 @@
 use crate::model::{AcsApiQueryParams, AcsValue, DeserializeGeoidFn};
 use bamcensus_core::model::identifier::Geoid;
-use futures::future;
+use futures::{stream, StreamExt};
 use itertools::Itertools;
 use kdam::BarExt;
 use reqwest::{Client, StatusCode};
 use std::sync::{Arc, Mutex};
+
+const MAX_CONCURRENT_REQUESTS: usize = 8;
 
 /// sets up a run of ACS queries.
 pub async fn batch_run<'a>(
@@ -35,7 +37,9 @@ pub async fn batch_run<'a>(
             res
         }
     });
-    let result = future::join_all(response)
+    let result = stream::iter(response)
+        .buffer_unordered(MAX_CONCURRENT_REQUESTS)
+        .collect::<Vec<_>>()
         .await
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?

@@ -22,10 +22,10 @@ plot = ["matplotlib", "contextily"]
 all = ["bamcensus[tests]", "bamcensus[plot]"]
 
 [project.urls]
-Homepage = "https://github.com/NREL/bamcensus"
+Homepage = "https://github.com/NLR/bamcensus"
 
 [tool.maturin]
 python-source = "python"
 features = ["pyo3/extension-module"]
-module-name = "bamcensus"
+module-name = "bamcensus_py"
 manifest-path = "Cargo.toml"

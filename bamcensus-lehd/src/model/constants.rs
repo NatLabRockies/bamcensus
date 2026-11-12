@@ -1,5 +1,5 @@
 /// most recent year with LODES data
-pub const LATEST_LODES_YEAR: u64 = 2021;
+pub const LATEST_LODES_YEAR: u64 = 2024;
 pub const BASE_URL: &str = "https://lehd.ces.census.gov/data/lodes";
 pub const ALL_STATES: [&str; 52] = [
     "al", "ak", "az", "ar", "ca", "co", "ct", "de", "dc", "fl", "ga", "hi", "id", "il", "in", "ia",

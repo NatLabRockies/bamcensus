@@ -6,11 +6,13 @@ use bamcensus_core::{
 };
 use csv::ReaderBuilder;
 use flate2::read::GzDecoder;
-use futures::future;
+use futures::{stream, StreamExt};
 use itertools::Itertools;
 use kdam::BarExt;
 use reqwest::Client;
 use std::sync::{Arc, Mutex};
+
+const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 
 /// Attempts to fetch and parse a single LODES dataset from a URL.
 ///
@@ -163,7 +165,7 @@ pub async fn run_wac_with_fallback(
         .desc("LODES downloads");
     let pb = Arc::new(Mutex::new(pb_builder.build()?));
 
-    // run each query in parallel with fallback logic
+    // run each query in parallel with bounded concurrency and fallback logic
     let responses = queries.iter().map(|query| {
         let client = &client;
         let wac_segments = &wac_segments;
@@ -190,16 +192,18 @@ pub async fn run_wac_with_fallback(
             }
         }
     });
-    eprintln!(); // progress bar terminated
 
     // join query result
-    let response_rows = future::join_all(responses)
+    let response_rows = stream::iter(responses)
+        .buffer_unordered(MAX_CONCURRENT_DOWNLOADS)
+        .collect::<Vec<_>>()
         .await
         .into_iter()
         .collect::<Result<Vec<_>, String>>()?
         .into_iter()
         .flatten()
         .collect_vec();
+    eprintln!(); // progress bar terminated
 
     // if requested, aggregate the result
     let aggregated_rows = match agg {
