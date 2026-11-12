@@ -1,10 +1,11 @@
 use crate::model::lodes_wac_tiger_row::LodesWacTigerRow;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
+use bamcensus_core::model::spatial::RegionFilter;
 use bamcensus_lehd::api::lodes_api;
-use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, WacSegment};
+use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, LodesQuery, WacSegment, WacValue};
 use bamcensus_tiger::model::TigerResourceBuilder;
-use bamcensus_tiger::ops::tiger_api;
+use bamcensus_tiger::ops::{spatial_resolver, tiger_api};
 use geo::Geometry;
 use itertools::Itertools;
 use reqwest::Client;
@@ -126,6 +127,87 @@ pub async fn run(
     let (tiger_rows_nested, tiger_errors): NestedResult =
         tiger_response.into_iter().partition_result();
 
+    finish_response(lodes_filtered, tiger_rows_nested, tiger_errors)
+}
+
+/// Run a LODES WAC query for explicit GEOIDs or a polygonal region.
+///
+/// Polygon selection applies at the output resolution (block by default).
+/// Aggregated values include all blocks in each selected geography; they are
+/// not clipped or weighted by the polygon. Place and county subdivision
+/// aggregation are not supported. Territories bamcensus cannot query are
+/// omitted and reported in `tiger_errors`. Resolver archive errors fail the query.
+pub async fn run_region(
+    region: &RegionFilter,
+    agg_geoid_type: &Option<GeoidType>,
+    wac_segments: &[WacSegment],
+    dataset: &LodesDataset,
+    fallback_policy: FallbackPolicy,
+) -> Result<LodesTigerResponse, String> {
+    let RegionFilter::Geometry {
+        geometry,
+        predicate,
+    } = region
+    else {
+        let RegionFilter::Geoids(geoids) = region else {
+            unreachable!()
+        };
+        return run(
+            geoids,
+            agg_geoid_type,
+            wac_segments,
+            dataset,
+            fallback_policy,
+        )
+        .await;
+    };
+    if !matches!(dataset, LodesDataset::WAC { .. }) {
+        return Err("polygon LODES queries support WAC datasets only".to_string());
+    }
+    let target = agg_geoid_type.unwrap_or(GeoidType::Block);
+    if matches!(target, GeoidType::Place | GeoidType::CountySubdivision) {
+        return Err(format!("LODES cannot aggregate blocks to {target}"));
+    }
+    let client = Client::new();
+    let builder = TigerResourceBuilder::new(dataset.tiger_year())?;
+    let resolved =
+        spatial_resolver::resolve_polygon(&client, &builder, geometry, target, *predicate).await?;
+    let (queries, tiger_errors) = spatial_lodes_queries(dataset, &resolved.matched_geometries);
+    if queries.is_empty() {
+        return finish_response(Vec::new(), Vec::new(), tiger_errors);
+    }
+    let agg = agg_geoid_type.map(|g| (g, bamcensus_core::ops::agg::NumericAggregation::Sum));
+    let rows =
+        lodes_api::run_wac_with_fallback(&client, &queries, wac_segments, agg, fallback_policy)
+            .await?;
+    let rows = crate::ops::join::filter_to_geometries(rows, &resolved.matched_geometries);
+    finish_response(rows, vec![resolved.matched_geometries], tiger_errors)
+}
+
+fn spatial_lodes_queries(
+    dataset: &LodesDataset,
+    geometries: &[(Geoid, Geometry<f64>)],
+) -> (Vec<LodesQuery>, Vec<String>) {
+    let mut queries = Vec::new();
+    let mut errors = Vec::new();
+    for state in geometries
+        .iter()
+        .map(|(geoid, _)| geoid.to_state())
+        .unique()
+    {
+        match dataset.create_query(&state) {
+            Ok(query) => queries.push(query),
+            Err(error) => errors.push(format!("bamcensus cannot query LODES for {state}: {error}")),
+        }
+    }
+    (queries, errors)
+}
+
+fn finish_response(
+    lodes_filtered: Vec<(Geoid, Vec<WacValue>)>,
+    tiger_rows_nested: Vec<Vec<(Geoid, Geometry<f64>)>>,
+    tiger_errors: Vec<String>,
+) -> Result<LodesTigerResponse, String> {
     let (join_dataset, join_errors) =
         crate::ops::join::dataset_with_geometries(lodes_filtered, tiger_rows_nested)?;
     let output_dataset = join_dataset
@@ -161,8 +243,70 @@ fn filter_rows_by_geoids<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bamcensus_core::model::identifier::fips;
+    use bamcensus_core::model::identifier::{fips, HasGeoidString};
+    use bamcensus_core::model::spatial::SpatialPredicate;
+    use bamcensus_core::ops::agg::NumericAggregation;
     use bamcensus_lehd::model::WacValue;
+    use geo::polygon;
+
+    fn geometry() -> Geometry<f64> {
+        Geometry::Polygon(
+            polygon![(x: 0.0, y: 0.0), (x: 1.0, y: 0.0), (x: 0.0, y: 1.0), (x: 0.0, y: 0.0)],
+        )
+    }
+
+    #[test]
+    fn polygon_queries_deduplicate_states_and_report_unsupported_territories() {
+        let geometries = vec![
+            (Geoid::try_from("08031000100").unwrap(), geometry()),
+            (Geoid::try_from("08059000100").unwrap(), geometry()),
+            (Geoid::try_from("72001000100").unwrap(), geometry()),
+        ];
+        let (queries, errors) = spatial_lodes_queries(&LodesDataset::default(), &geometries);
+        assert_eq!(queries.len(), 1);
+        assert_eq!(queries[0].state_code.to_fips_string(), "08");
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("72"));
+    }
+
+    #[test]
+    fn polygon_filter_selects_whole_aggregated_geographies() {
+        let value = |n| vec![WacValue::new(WacSegment::C000, n)];
+        let rows = vec![
+            (Geoid::try_from("080310001001001").unwrap(), value(10.0)),
+            (Geoid::try_from("080310001001002").unwrap(), value(20.0)),
+            (Geoid::try_from("080310002001001").unwrap(), value(50.0)),
+        ];
+        let aggregated = bamcensus_lehd::ops::lodes_agg::aggregate_lodes_wac(
+            &rows,
+            GeoidType::CensusTract,
+            NumericAggregation::Sum,
+        )
+        .unwrap();
+        let geometries = vec![(Geoid::try_from("08031000100").unwrap(), geometry())];
+        let selected = crate::ops::join::filter_to_geometries(aggregated, &geometries);
+        let result = finish_response(selected, vec![geometries], vec![]).unwrap();
+        assert_eq!(result.join_dataset.len(), 1);
+        assert_eq!(result.join_dataset[0].geoid.geoid_string(), "08031000100");
+        assert_eq!(result.join_dataset[0].value.value, 30.0);
+        assert!(result.join_errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn rejects_unsupported_polygon_lodes_queries_before_download() {
+        let region = RegionFilter::new_geometry(geometry(), SpatialPredicate::Intersects).unwrap();
+        for target in [GeoidType::Place, GeoidType::CountySubdivision] {
+            let result = run_region(
+                &region,
+                &Some(target),
+                &[WacSegment::C000],
+                &LodesDataset::default(),
+                FallbackPolicy::FailAlways,
+            )
+            .await;
+            assert!(result.err().unwrap().contains("cannot aggregate"));
+        }
+    }
 
     #[test]
     fn test_filter_rows_by_geoids_keeps_only_requested_county() {

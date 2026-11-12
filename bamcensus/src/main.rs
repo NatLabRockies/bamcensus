@@ -1,6 +1,7 @@
 //! Command line tool for running BAMCENSUS Apps.
 use bamcensus::app::acs_tiger_args::AcsTigerAppCli;
 use bamcensus::app::lodes_tiger_args::LodesTigerCli;
+use bamcensus::app::tiger_args::TigerAppCli;
 use clap::Parser;
 use clap::Subcommand;
 
@@ -20,6 +21,9 @@ pub enum BamCensusApp {
     /// Longitudinal Employer-Household Dynamics (LEHD) Download Tools
     #[command(subcommand, alias = "lehd")]
     LehdApp(LehdAppCli),
+    /// TIGER/Line Spatial Lookup Tools
+    #[command(alias = "tiger")]
+    TigerApp(TigerAppCli),
 }
 
 #[derive(Subcommand)]
@@ -34,5 +38,6 @@ async fn main() {
     match args.command {
         BamCensusApp::AcsApp(acs_args) => acs_args.run().await,
         BamCensusApp::LehdApp(LehdAppCli::Lodes(lodes_args)) => lodes_args.run().await,
+        BamCensusApp::TigerApp(tiger_args) => tiger_args.run().await,
     }
 }

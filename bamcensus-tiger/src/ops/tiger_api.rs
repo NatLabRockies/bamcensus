@@ -7,6 +7,7 @@ use geo_types::Geometry;
 use itertools::Itertools;
 use kdam::BarExt;
 use log;
+use rayon::prelude::*;
 use reqwest::Client;
 use shapefile::dbase::Record;
 use shapefile::{dbase, Shape, ShapeReader};
@@ -27,7 +28,7 @@ const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 /// site. the archives are Shapefile archives, and there isn't great
 /// tooling to stream these data sources, so here we chose to download
 /// the archives, unpack, and then load from the extracted file paths.
-pub async fn run<'a>(
+pub async fn run(
     client: &Client,
     builder: &TigerResourceBuilder,
     geoids: &[&Geoid],
@@ -46,29 +47,10 @@ pub async fn run<'a>(
         let lookup = &lookup;
         let pb = pb.clone();
         async move {
-            let read_path = get_or_download_tiger_zip(client, &tiger.uri).await?;
-
-            // unpack archive
-            let read_file = File::open(&read_path)
-                .map_err(|e| format!("failure opening temporary zip archive file location: {e}"))?;
-            let mut z = ZipArchive::new(read_file)
-                .map_err(|e| format!("failure reading temporary zip archive: {e}"))?;
-            let shp_filename = get_zip_filename(&z, ".shp")?;
-            let dbf_filename = get_zip_filename(&z, ".dbf")?;
-            let shp_contents = zip_file_into_string(&mut z, &shp_filename)?;
-            let dbf_contents = zip_file_into_string(&mut z, &dbf_filename)?;
-
-            // read shapes and records
-            let mut reader = create_shapefile_reader(&shp_contents, &dbf_contents)?;
-            let read_result = reader
-                .iter_shapes_and_records()
-                .map(|row| {
-                    let (shape, record) =
-                        row.map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
-                    into_geoid_and_geometry(shape, record, lookup, &tiger)
-                })
-                .collect::<Result<Vec<_>, String>>()?;
-            let result = read_result.into_iter().flatten().collect_vec();
+            let result = read_resource(client, &tiger, |shape, record| {
+                into_geoid_and_geometry(shape, record, lookup, &tiger)
+            })
+            .await?;
 
             // update progress bar
             let mut pb_update = pb
@@ -90,48 +72,110 @@ pub async fn run<'a>(
     Ok(result)
 }
 
-async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<PathBuf, String> {
+pub(crate) async fn read_resource<T: Send>(
+    client: &Client,
+    resource: &TigerResource,
+    select: impl Fn(Shape, Record) -> Result<Option<T>, String> + Sync,
+) -> Result<Vec<T>, String> {
+    let file = get_or_download_tiger_zip(client, &resource.uri).await?;
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("failure reading TIGER archive {}: {e}", resource.uri))?;
+    let shp_filename = get_zip_filename(&archive, ".shp")?;
+    let dbf_filename = get_zip_filename(&archive, ".dbf")?;
+    let shp_contents = zip_file_into_string(&mut archive, &shp_filename)?;
+    let dbf_contents = zip_file_into_string(&mut archive, &dbf_filename)?;
+    let mut reader = create_shapefile_reader(&shp_contents, &dbf_contents)?;
+    let mut result = Vec::new();
+    for chunk in &reader.iter_shapes_and_records().chunks(512) {
+        let rows = chunk
+            .map(|row| row.map_err(|e| format!("failure reading shapefile shape/record: {e}")))
+            .collect::<Result<Vec<_>, _>>()?;
+        let selected = rows
+            .into_par_iter()
+            .map(|(shape, record)| select(shape, record))
+            .collect::<Result<Vec<_>, _>>()?;
+        result.extend(selected.into_iter().flatten());
+    }
+    Ok(result)
+}
+
+async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<File, String> {
     if let Some(cache_path) = tiger_cache_path(uri) {
-        if cache_path.exists() {
-            log::debug!("using cached TIGER archive {}", cache_path.display());
-            return Ok(cache_path);
-        }
-        if let Some(parent) = cache_path.parent() {
-            let _ = fs::create_dir_all(parent);
-            if let Ok(named_tmp) = tempfile::Builder::new()
-                .prefix(".tiger-")
-                .suffix(".zip.part")
-                .tempfile_in(parent)
-            {
-                let (file, tmp_path) = named_tmp.into_parts();
-                download(client, uri, file).await?;
-                match tmp_path.persist(&cache_path) {
-                    Ok(_) => return Ok(cache_path),
-                    Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                        return Ok(cache_path);
-                    }
-                    Err(e) => {
-                        if cache_path.exists() {
-                            return Ok(cache_path);
-                        }
-                        return Err(format!(
-                            "failure moving cached zip file into place: {}",
-                            e.error
-                        ));
-                    }
-                }
-            }
-        }
+        return get_or_download_cached(client, uri, &cache_path).await;
     }
 
-    let named_tmp = tempfile::NamedTempFile::new()
-        .map_err(|e| format!("failure creating temporary zip archive filepath: {e}"))?;
-    let (write_file, tmp_path) = named_tmp.into_parts();
+    let file = tempfile::tempfile()
+        .map_err(|e| format!("failure creating temporary zip archive file: {e}"))?;
+    download(
+        client,
+        uri,
+        file.try_clone()
+            .map_err(|e| format!("failure cloning temporary TIGER archive: {e}"))?,
+    )
+    .await?;
+    use std::io::Seek;
+    let mut file = file;
+    file.rewind()
+        .map_err(|e| format!("failure rewinding temporary TIGER archive: {e}"))?;
+    Ok(file)
+}
+
+async fn get_or_download_cached(
+    client: &Client,
+    uri: &str,
+    cache_path: &std::path::Path,
+) -> Result<File, String> {
+    if cache_path.exists() {
+        log::debug!("using cached TIGER archive {}", cache_path.display());
+        return File::open(cache_path).map_err(|e| {
+            format!(
+                "failure opening cached TIGER archive {}: {e}",
+                cache_path.display()
+            )
+        });
+    }
+    let parent = cache_path
+        .parent()
+        .ok_or_else(|| format!("invalid TIGER cache path {}", cache_path.display()))?;
+    fs::create_dir_all(parent).map_err(|e| {
+        format!(
+            "failure creating TIGER cache directory {}: {e}",
+            parent.display()
+        )
+    })?;
+    let temp = tempfile::Builder::new()
+        .prefix(".tiger-")
+        .suffix(".zip.part")
+        .tempfile_in(parent)
+        .map_err(|e| format!("failure creating temporary TIGER archive: {e}"))?;
+    let write_file = temp
+        .reopen()
+        .map_err(|e| format!("failure opening temporary TIGER archive: {e}"))?;
     download(client, uri, write_file).await?;
-    let read_path = tmp_path
-        .keep()
-        .map_err(|e| format!("failure persisting temporary zip archive file: {e}"))?;
-    Ok(read_path)
+    let archive_file = temp
+        .reopen()
+        .map_err(|e| format!("failure opening downloaded TIGER archive: {e}"))?;
+    let archive = ZipArchive::new(archive_file)
+        .map_err(|e| format!("invalid TIGER archive from {uri}: {e}"))?;
+    get_zip_filename(&archive, ".shp")?;
+    get_zip_filename(&archive, ".dbf")?;
+    match temp.persist_noclobber(cache_path) {
+        Ok(_) => {}
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists || cache_path.exists() => {}
+        Err(e) => {
+            return Err(format!(
+                "failure publishing cached TIGER archive {}: {}",
+                cache_path.display(),
+                e.error
+            ))
+        }
+    }
+    File::open(cache_path).map_err(|e| {
+        format!(
+            "failure opening cached TIGER archive {}: {e}",
+            cache_path.display()
+        )
+    })
 }
 
 fn tiger_cache_path(uri: &str) -> Option<PathBuf> {
@@ -172,7 +216,10 @@ const GEOID_COLUMN_NAMES: [&str; 3] = ["GEOID", "GEOID20", "GEOID10"];
 /// 1. "GEOID"   - most general
 /// 2. "GEOID20" - latest
 /// 3. "GEOID10" - when general or latest is not present
-fn get_geoid_from_record(record: &Record, geoid_type: &GeoidType) -> Result<Geoid, String> {
+pub(crate) fn get_geoid_from_record(
+    record: &Record,
+    geoid_type: &GeoidType,
+) -> Result<Geoid, String> {
     let field_name = GEOID_COLUMN_NAMES
         .iter()
         .find(|col| record.get(col).is_some())
@@ -209,6 +256,8 @@ async fn download(client: &Client, uri: &str, write_file: File) -> Result<(), St
         .get(uri)
         .send()
         .await
+        .map_err(|e| format!("failure retrieving TIGER zip archive: {e}"))?
+        .error_for_status()
         .map_err(|e| format!("failure retrieving TIGER zip archive: {e}"))?
         .bytes_stream();
 
@@ -262,4 +311,93 @@ fn create_shapefile_reader<'a>(
     let reader: shapefile::Reader<Cursor<&Vec<u8>>, Cursor<&Vec<u8>>> =
         shapefile::Reader::new(shape_reader, database_reader);
     Ok(reader)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::TcpListener;
+    use zip::write::SimpleFileOptions;
+
+    fn archive_bytes() -> Vec<u8> {
+        let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for name in ["test.shp", "test.dbf"] {
+            archive
+                .start_file(name, SimpleFileOptions::default())
+                .unwrap();
+            archive.write_all(b"fixture").unwrap();
+        }
+        archive.finish().unwrap().into_inner()
+    }
+
+    async fn serve_responses(
+        status: &str,
+        body: Vec<u8>,
+        count: usize,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let uri = format!("http://{}/archive.zip", listener.local_addr().unwrap());
+        let status = status.to_string();
+        let handle = tokio::spawn(async move {
+            let mut sockets = Vec::new();
+            for _ in 0..count {
+                sockets.push(listener.accept().await.unwrap().0);
+            }
+            for mut socket in sockets {
+                let mut reader = BufReader::new(&mut socket);
+                let mut line = String::new();
+                loop {
+                    line.clear();
+                    assert!(reader.read_line(&mut line).await.unwrap() > 0);
+                    if line == "\r\n" {
+                        break;
+                    }
+                }
+                let headers = format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                socket.write_all(headers.as_bytes()).await.unwrap();
+                socket.write_all(&body).await.unwrap();
+            }
+        });
+        (uri, handle)
+    }
+
+    #[tokio::test]
+    async fn failed_responses_do_not_poison_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        for (status, body) in [
+            ("404 Not Found", b"missing".to_vec()),
+            ("200 OK", b"not a zip".to_vec()),
+        ] {
+            let (uri, server) = serve_responses(status, body, 1).await;
+            let cache = dir.path().join("archive.zip");
+            let result = get_or_download_cached(&Client::new(), &uri, &cache).await;
+            assert!(result.is_err());
+            assert!(!cache.exists());
+            server.await.unwrap();
+            assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn concurrent_downloads_publish_a_complete_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let cache = dir.path().join("archive.zip");
+        let bytes = archive_bytes();
+        let (uri, server) = serve_responses("200 OK", bytes.clone(), 2).await;
+        let client = Client::new();
+        let (first, second) = tokio::join!(
+            get_or_download_cached(&client, &uri, &cache),
+            get_or_download_cached(&client, &uri, &cache)
+        );
+        first.unwrap();
+        second.unwrap();
+        server.await.unwrap();
+        assert_eq!(fs::read(&cache).unwrap(), bytes);
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1);
+    }
 }

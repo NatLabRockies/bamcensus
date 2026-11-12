@@ -11,6 +11,7 @@ documentation = "https://docs.rs/bamcensus-core"
 [dependencies]
 clap = { workspace = true }
 derive_more = { workspace = true }
+geo-types = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
