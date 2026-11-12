@@ -53,7 +53,13 @@ impl AcsTigerAppCli {
             None => String::new(),
         };
         let filename = match &self.output_file {
-            None => format!("{}-{}-{}.csv", self.year, self.acs_type, res_msg),
+            None => {
+                if res_msg.is_empty() {
+                    format!("{}-{}.csv", self.year, self.acs_type)
+                } else {
+                    format!("{}-{}-{}.csv", self.year, self.acs_type, res_msg)
+                }
+            }
             Some(f) => f.clone(),
         };
         let res = acs_tiger::run_region(&params).await.unwrap();

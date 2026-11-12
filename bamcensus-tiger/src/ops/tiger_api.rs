@@ -55,7 +55,7 @@ pub async fn run(
             // update progress bar
             let mut pb_update = pb
                 .lock()
-                .map_err(|e| format!("failure aquiring progress bar mutex lock: {e}"))?;
+                .map_err(|e| format!("failure acquiring progress bar mutex lock: {e}"))?;
             pb_update
                 .update(1)
                 .map_err(|e| format!("failure on pb update: {e}"))?;
@@ -143,7 +143,10 @@ async fn get_or_download_cached(
             parent.display()
         )
     })?;
-    let temp = tempfile::NamedTempFile::new_in(parent)
+    let temp = tempfile::Builder::new()
+        .prefix(".tiger-")
+        .suffix(".zip.part")
+        .tempfile_in(parent)
         .map_err(|e| format!("failure creating temporary TIGER archive: {e}"))?;
     let write_file = temp
         .reopen()
@@ -158,7 +161,7 @@ async fn get_or_download_cached(
     get_zip_filename(&archive, ".dbf")?;
     match temp.persist_noclobber(cache_path) {
         Ok(_) => {}
-        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists || cache_path.exists() => {}
         Err(e) => {
             return Err(format!(
                 "failure publishing cached TIGER archive {}: {}",

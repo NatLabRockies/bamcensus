@@ -1,6 +1,6 @@
 # bamcensus-lehd
 
-Tooling to support batch geospatial data collection and aggregation from the US Census [Longitudinal Employer-Household Dynamics (LEHD)](https://lehd.ces.census.gov/) Origin-Destination Employment Statistics (LODES) datasets, as part of the [`bamcensus`](https://github.com/NREL/bamcensus) workspace.
+Tooling to support batch geospatial data collection and aggregation from the US Census [Longitudinal Employer-Household Dynamics (LEHD)](https://lehd.ces.census.gov/) Origin-Destination Employment Statistics (LODES) datasets, as part of the [`bamcensus`](https://github.com/NLR/bamcensus) workspace.
 
 ## Overview
 

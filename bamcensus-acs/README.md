@@ -1,6 +1,6 @@
 # bamcensus-acs
 
-Tooling to support batch geospatial data collection and aggregation from the US Census [American Community Survey (ACS)](https://www.census.gov/programs-surveys/acs.html) REST API, as part of the [`bamcensus`](https://github.com/NREL/bamcensus) workspace.
+Tooling to support batch geospatial data collection and aggregation from the US Census [American Community Survey (ACS)](https://www.census.gov/programs-surveys/acs.html) REST API, as part of the [`bamcensus`](https://github.com/NLR/bamcensus) workspace.
 
 ## Overview
 
