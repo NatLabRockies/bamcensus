@@ -98,24 +98,39 @@ async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<PathBuf
         }
         if let Some(parent) = cache_path.parent() {
             let _ = fs::create_dir_all(parent);
-        }
-        let tmp_path = cache_path.with_extension("zip.part");
-        if let Ok(write_file) = File::create(&tmp_path) {
-            download(client, uri, write_file).await?;
-            fs::rename(&tmp_path, &cache_path)
-                .map_err(|e| format!("failure moving cached zip file into place: {e}"))?;
-            return Ok(cache_path);
+            if let Ok(named_tmp) = tempfile::Builder::new()
+                .prefix(".tiger-")
+                .suffix(".zip.part")
+                .tempfile_in(parent)
+            {
+                let (file, tmp_path) = named_tmp.into_parts();
+                download(client, uri, file).await?;
+                match tmp_path.persist(&cache_path) {
+                    Ok(_) => return Ok(cache_path),
+                    Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                        return Ok(cache_path);
+                    }
+                    Err(e) => {
+                        if cache_path.exists() {
+                            return Ok(cache_path);
+                        }
+                        return Err(format!(
+                            "failure moving cached zip file into place: {}",
+                            e.error
+                        ));
+                    }
+                }
+            }
         }
     }
 
     let named_tmp = tempfile::NamedTempFile::new()
         .map_err(|e| format!("failure creating temporary zip archive filepath: {e}"))?;
-    let (_, read_path) = named_tmp
+    let (write_file, tmp_path) = named_tmp.into_parts();
+    download(client, uri, write_file).await?;
+    let read_path = tmp_path
         .keep()
         .map_err(|e| format!("failure persisting temporary zip archive file: {e}"))?;
-    let write_file = File::create(&read_path)
-        .map_err(|e| format!("failure creating temporary zip archive file: {e}"))?;
-    download(client, uri, write_file).await?;
     Ok(read_path)
 }
 
