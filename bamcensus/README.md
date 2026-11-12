@@ -33,7 +33,7 @@ let acs = acs_tiger::run_region(&acs_tiger::AcsRegionQueryParams {
     acs_get_query: vec!["B01001_001E".into()],
     region: region.clone(),
     output_resolution: Some(GeoidType::CensusTract),
-    acs_token: None, // Supply a Census API key if required.
+    acs_token: std::env::var("CENSUS_API_TOKEN").ok(),
 }).await?;
 let lodes = lodes_tiger::run_region(
     &region,
@@ -96,7 +96,7 @@ Queries American Community Survey (ACS) data and joins it with TIGER/Line geomet
 - `--year` (required): Year of ACS and TIGER/Line data.
 - `--acs-query` (required): Comma-separated ACS variables to retrieve (e.g., `NAME,B01001_001E`).
 - `--acs-type` (required): `one-year` or `five-year` estimates.
-- `--acs-token` (optional): API token for the Census ACS API.
+- `--acs-token` (required if `CENSUS_API_TOKEN` is not set; env: `CENSUS_API_TOKEN`): API token for the Census ACS API.
 - `--output-file` (optional): Output CSV file path (default: `<year>-<acs_type>-<resolution>.csv`).
 
 **Examples:**

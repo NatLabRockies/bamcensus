@@ -33,8 +33,19 @@ pub fn run_acs_tiger_python<'a>(
     let region = get_region_filter(kwds)?;
     let output_resolution = get_output_resolution(kwds)?;
     let acs_api_token = match get_opt_string("acs_api_token", kwds)? {
-        Some(t) => Some(t),
-        None => get_opt_string("acs_token", kwds)?,
+        Some(t) => t,
+        None => match get_opt_string("acs_token", kwds)? {
+            Some(t) => t,
+            None => std::env::var("CENSUS_API_TOKEN")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    PyException::new_err(
+                        "missing ACS API token: pass acs_token=... or set CENSUS_API_TOKEN",
+                    )
+                })?,
+        },
     };
 
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -51,7 +62,7 @@ pub fn run_acs_tiger_python<'a>(
         acs_get_query,
         region,
         output_resolution,
-        acs_token: acs_api_token,
+        acs_token: Some(acs_api_token),
     };
 
     let result = runtime

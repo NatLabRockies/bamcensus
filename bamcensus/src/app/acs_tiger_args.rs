@@ -23,9 +23,9 @@ pub struct AcsTigerAppCli {
     /// one or five year estimates, see ACS documentation for more information
     #[arg(short, long)]
     pub acs_type: AcsType,
-    /// if provided, token for ACS API (to avoid public rate limits)
-    #[arg(short = 't', long)]
-    pub acs_token: Option<String>,
+    /// token for ACS API (can also be set via CENSUS_API_TOKEN)
+    #[arg(short = 't', long, env = "CENSUS_API_TOKEN")]
+    pub acs_token: String,
     /// path and file to write result. if not provided, will use a concatenation of the CLI arguments
     #[arg(long)]
     pub output_file: Option<String>,
@@ -45,7 +45,7 @@ impl AcsTigerAppCli {
             acs_get_query,
             region,
             output_resolution: self.output_resolution,
-            acs_token: self.acs_token.clone(),
+            acs_token: Some(self.acs_token.clone()),
         };
 
         let res_msg = match self.output_resolution {
@@ -98,6 +98,7 @@ mod tests {
             "--year=2020",
             "--acs-query=NAME",
             "--acs-type=five-year",
+            "--acs-token=test-token",
         ])
         .is_err());
 
@@ -107,8 +108,10 @@ mod tests {
             "--year=2020",
             "--acs-query=NAME",
             "--acs-type=five-year",
+            "--acs-token=test-token",
         ])
         .unwrap();
+        assert_eq!(parsed.acs_token, "test-token");
         assert!(parsed
             .region
             .to_region_filter(parsed.output_resolution, false)

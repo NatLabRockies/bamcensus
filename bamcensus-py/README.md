@@ -19,7 +19,8 @@ maturin develop --release
 import bamcensus
 
 # Query 2020 5-Year ACS population (B01001_001E) at the census tract level
-# for Jefferson (08059) and Ouray (08091) counties in Colorado
+# for Jefferson (08059) and Ouray (08091) counties in Colorado.
+# Requires CENSUS_API_TOKEN in the environment or acs_token="..."
 gdf = bamcensus.run_acs_tiger(
     year=2020,
     geoids="08059,08091",
