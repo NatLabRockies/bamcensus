@@ -25,7 +25,7 @@ pub use wac_segment::WacSegment;
 pub use wac_value::WacValue;
 pub use workplace_segment::WorkplaceSegment;
 
-pub const LATEST_YEAR: u64 = 2021;
+pub const LATEST_YEAR: u64 = 2024;
 pub const BASE_URL: &str = "https://lehd.ces.census.gov/data/lodes";
 pub const ALL_STATES: [&str; 52] = [
     "al", "ak", "az", "ar", "ca", "co", "ct", "de", "dc", "fl", "ga", "hi", "id", "il", "in", "ia",
