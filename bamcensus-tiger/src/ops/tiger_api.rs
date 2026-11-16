@@ -7,7 +7,6 @@ use geo_types::Geometry;
 use itertools::Itertools;
 use kdam::BarExt;
 use log;
-use rayon::prelude::*;
 use reqwest::Client;
 use shapefile::dbase::Record;
 use shapefile::{dbase, Shape, ShapeReader};
@@ -72,10 +71,10 @@ pub async fn run(
     Ok(result)
 }
 
-pub(crate) async fn read_resource<T: Send>(
+pub(crate) async fn read_resource<T>(
     client: &Client,
     resource: &TigerResource,
-    select: impl Fn(Shape, Record) -> Result<Option<T>, String> + Sync,
+    select: impl Fn(Shape, Record) -> Result<Option<T>, String>,
 ) -> Result<Vec<T>, String> {
     let file = get_or_download_tiger_zip(client, &resource.uri).await?;
     let mut archive = ZipArchive::new(file)
@@ -86,15 +85,12 @@ pub(crate) async fn read_resource<T: Send>(
     let dbf_contents = zip_file_into_string(&mut archive, &dbf_filename)?;
     let mut reader = create_shapefile_reader(&shp_contents, &dbf_contents)?;
     let mut result = Vec::new();
-    for chunk in &reader.iter_shapes_and_records().chunks(512) {
-        let rows = chunk
-            .map(|row| row.map_err(|e| format!("failure reading shapefile shape/record: {e}")))
-            .collect::<Result<Vec<_>, _>>()?;
-        let selected = rows
-            .into_par_iter()
-            .map(|(shape, record)| select(shape, record))
-            .collect::<Result<Vec<_>, _>>()?;
-        result.extend(selected.into_iter().flatten());
+    for row in reader.iter_shapes_and_records() {
+        let (shape, record) =
+            row.map_err(|e| format!("failure reading shapefile shape/record: {e}"))?;
+        if let Some(selected) = select(shape, record)? {
+            result.push(selected);
+        }
     }
     Ok(result)
 }
