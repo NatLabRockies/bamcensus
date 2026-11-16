@@ -94,7 +94,15 @@ def _normalize_kwargs(kwds: dict[str, Any]) -> dict[str, Any]:
     for list_key in ("acs_query", "variables", "wac_segments"):
         if list_key in out and not isinstance(out[list_key], str):
             if isinstance(out[list_key], Iterable):
-                out[list_key] = ",".join(str(item).strip() for item in out[list_key])
+                normalized_list = ",".join(
+                    str(item).strip()
+                    for item in out[list_key]
+                    if item is not None and str(item).strip()
+                )
+                if normalized_list:
+                    out[list_key] = normalized_list
+                else:
+                    out.pop(list_key, None)
 
     return out
 
