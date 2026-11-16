@@ -122,7 +122,7 @@ When a LODES download returns a **404 Not Found** HTTP response:
 - **404 Errors**: Trigger retry attempts
 - **HTTP Errors (400, 500, etc.)**: Fail immediately (not retried)
 - **Parse Errors**: Fail immediately (not retried)
-- **All Candidates Exhausted**: Returns an empty result (no error)
+- **All Candidates Exhausted**: For non-default fallback policies, prints a warning and skips the query (empty result); `FailAlways` returns an error.
 
 ### Concurrency
 

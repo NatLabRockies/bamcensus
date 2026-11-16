@@ -201,7 +201,7 @@ impl TigerResourceBuilder {
             (TigerResourceBuilder::Tiger2010, Geoid::State(_)) => Some(GeoidType::State),
             (TigerResourceBuilder::Tiger2010, Geoid::County(_, _)) => Some(GeoidType::State),
             (TigerResourceBuilder::Tiger2010, Geoid::CountySubdivision(_, _, _)) => {
-                Some(GeoidType::State)
+                Some(GeoidType::County)
             }
             (TigerResourceBuilder::Tiger2010, Geoid::Place(_, _)) => Some(GeoidType::State),
             (TigerResourceBuilder::Tiger2010, Geoid::CensusTract(_, _, _)) => {

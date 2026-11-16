@@ -17,6 +17,7 @@ bamcensus = { path = "../bamcensus", version = "0.2.0" }
 bamcensus-acs = { path = "../bamcensus-acs", version = "0.2.0" }
 bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
 bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.2.0" }
+bamcensus-tiger = { path = "../bamcensus-tiger", version = "0.2.0" }
 itertools = { workspace = true }
 pyo3 = { version = "0.22.2", features = [
     "extension-module",
@@ -24,6 +25,7 @@ pyo3 = { version = "0.22.2", features = [
     # "experimental-async",
     "abi3-py310",
 ] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

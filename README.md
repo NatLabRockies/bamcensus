@@ -36,7 +36,7 @@ Its primary motivation stems from the need for a high-performance solution to co
 ## Geographic Resolution vs. Wildcard Semantics
 
 Across the CLI, Rust API, and Python API, you specify:
-1. **Input Region (`geoids`)**: One or more parent or target GEOIDs (e.g., `08` for Colorado, or `08031,08059` for Denver and Jefferson counties).
+1. **Input Region (`geoids` or `polygon`)**: Either one or more parent/target GEOIDs (e.g., `08` for Colorado, or `08031,08059` for Denver and Jefferson counties) or a polygonal study region (WKT, GeoJSON, Shapefile, Shapely geometry, or `geopandas.GeoDataFrame`) paired with a spatial predicate (`intersects`, `centroid_within`, `within`, or `area_overlap`).
 2. **Output Resolution (`--output-resolution` / `wildcard`)**: The target `GeoidType` granularity (`state`, `county`, `county_subdivision`, `place`, `census_tract`, `block_group`, `block`) for the returned rows and TIGER geometries:
    - **In ACS workflows**: Output resolution acts as a **server-side wildcard** (`for=<output_resolution>:*&in=...`) in the Census REST API query, returning estimates directly at the requested geography level.
    - **In LODES workflows**: Raw LODES files are always published by state at the **Census Block** level. When an output resolution (such as `census_tract` or `county`) is specified, `bamcensus` downloads the state LODES file, filters to blocks within the input `geoids`, **truncates block GEOIDs to the target parent `GeoidType`**, and aggregates job counts client-side before joining with TIGER/Line geometries at that resolution.
@@ -55,7 +55,7 @@ Across the CLI, Rust API, and Python API, you specify:
   - [ ] R API
   - [ ] macro-driven compilation of annual data schemas
   - [ ] support for OD + RAC LEHD datasets
-  - [ ] polygon-to-GEOID spatial query filtering
+  - [x] polygon-to-GEOID spatial query filtering
 
 ## License
 

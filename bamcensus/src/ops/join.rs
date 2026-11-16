@@ -2,9 +2,19 @@ use bamcensus_core::model::identifier::Geoid;
 use geo::Geometry;
 use itertools::Itertools;
 use kdam::BarExt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type PartitionedJoinResult<T> = (Vec<(Geoid, Geometry, Vec<T>)>, Vec<String>);
+
+pub(crate) fn filter_to_geometries<T>(
+    rows: Vec<(Geoid, Vec<T>)>,
+    geometries: &[(Geoid, Geometry<f64>)],
+) -> Vec<(Geoid, Vec<T>)> {
+    let matched: HashSet<_> = geometries.iter().map(|(geoid, _)| geoid).collect();
+    rows.into_iter()
+        .filter(|(geoid, _)| matched.contains(geoid))
+        .collect()
+}
 
 /// joins a dataset with a geometry dataset. it is assumed that all Geoids in the data rows
 /// are present in the tiger rows. this join builds an index over the geometries, steps through

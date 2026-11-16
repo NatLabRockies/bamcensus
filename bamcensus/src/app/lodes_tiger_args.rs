@@ -1,24 +1,23 @@
 use super::lodes_tiger;
+use super::region_args::RegionCliArgs;
 use crate::model::lodes_tiger_output_row::LodesTigerOutputRow;
 use bamcensus_core::model::identifier::GeoidType;
-use bamcensus_core::model::identifier::{Geoid, StateCode};
 use bamcensus_lehd::model::{
     FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
 };
 use clap::{Args, Parser, Subcommand};
-use itertools::Itertools;
 use std::str::FromStr;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct LodesTigerCli {
     /// declare the LODES dataset to retrieve
     #[command(subcommand)]
-    dataset: LodesTigerDatasetCli,
+    pub dataset: LodesTigerDatasetCli,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 pub enum LodesTigerDatasetCli {
     /// Workplace-Area characteristics (WAC) LODES data downloader
     Wac(LodesTigerWacApi),
@@ -26,11 +25,10 @@ pub enum LodesTigerDatasetCli {
     Rac,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct LodesTigerWacApi {
-    /// comma-delimited list of geoids representing the geographic area for download
-    #[arg(short, long)]
-    pub geoids: Option<String>,
+    #[command(flatten)]
+    pub region: RegionCliArgs,
     /// produce output rows at the given geospatial resolution. original resolution if not specified.
     #[arg(short, long)]
     pub output_resolution: Option<GeoidType>,
@@ -54,7 +52,7 @@ pub struct LodesTigerWacApi {
     /// - try_N_years_back: try N years earlier on failure
     /// - try_N_years_forward: try N years later on failure
     /// - bidirectional_N_back_M_forward: try N years back or M years forward
-    /// Example: try_2_years_back, try_1_years_forward, bidirectional_1_back_2_forward
+    ///   Example: try_2_years_back, try_1_years_forward, bidirectional_1_back_2_forward
     #[arg(long, default_value = "fail_always", value_parser = parse_fallback_policy)]
     pub fallback: FallbackPolicy,
 }
@@ -74,26 +72,18 @@ impl LodesTigerCli {
 }
 
 async fn run_wac(args: &LodesTigerWacApi) {
-    let geoids = match &args.geoids {
-        Some(s) => s
-            .split(',')
-            .map(|g| Geoid::try_from(g).unwrap())
-            .collect_vec(),
-        None => StateCode::ALL
-            .iter()
-            .map(|sc| {
-                let fips = sc.to_fips_string();
-                Geoid::try_from(fips.as_str()).unwrap()
-            })
-            .collect_vec(),
-    };
+    let wildcard = args.output_resolution;
+    let region_resolution = wildcard.or(Some(GeoidType::Block));
+    let region = args
+        .region
+        .to_region_filter(region_resolution, true)
+        .unwrap();
     let dataset = LodesDataset::WAC {
         edition: args.edition,
         job_type: args.jobtype,
         segment: args.segment,
         year: args.year,
     };
-    let wildcard = args.output_resolution;
     let wac_segments = args
         .wac_segments
         .split(',')
@@ -101,7 +91,7 @@ async fn run_wac(args: &LodesTigerWacApi) {
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
 
-    let res = lodes_tiger::run(&geoids, &wildcard, &wac_segments, &dataset, args.fallback)
+    let res = lodes_tiger::run_region(&region, &wildcard, &wac_segments, &dataset, args.fallback)
         .await
         .unwrap();
     println!(
@@ -128,5 +118,33 @@ async fn run_wac(args: &LodesTigerWacApi) {
     for row in res.join_dataset {
         let out_row = LodesTigerOutputRow::from(row);
         writer.serialize(out_row).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bamcensus_core::model::spatial::RegionFilter;
+
+    #[test]
+    fn lodes_cli_defaults_to_all_states_and_rejects_geoid_polygon_conflict() {
+        let cli = LodesTigerCli::try_parse_from(["lodes_tiger_app", "wac", "--year=2020"]).unwrap();
+        let LodesTigerDatasetCli::Wac(wac) = cli.dataset else {
+            panic!("expected wac subcommand");
+        };
+        let region = wac
+            .region
+            .to_region_filter(wac.output_resolution.or(Some(GeoidType::Block)), true)
+            .unwrap();
+        assert!(matches!(region, RegionFilter::Geoids(geoids) if geoids.len() == 51));
+
+        assert!(LodesTigerCli::try_parse_from([
+            "lodes_tiger_app",
+            "wac",
+            "--year=2020",
+            "--geoids=08",
+            "--polygon=POLYGON ((-105 39, -104 39, -104 40, -105 40, -105 39))",
+        ])
+        .is_err());
     }
 }

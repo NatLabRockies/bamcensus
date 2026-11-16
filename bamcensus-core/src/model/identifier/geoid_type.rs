@@ -220,7 +220,7 @@ impl GeoidType {
                         fips::State(arr[0]),
                         fips::County(arr[1]),
                         fips::CensusTract(arr[2]),
-                        fips::Block(format!("{}", arr[3])),
+                        fips::Block(vals[3].clone()),
                     ))
                 }
             }
@@ -240,4 +240,22 @@ fn as_usizes(arr: &[String]) -> Result<Vec<u64>, String> {
             Ok(v_u64)
         })
         .collect::<Result<Vec<u64>, String>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::identifier::HasGeoidString;
+
+    #[test]
+    fn block_geoid_preserves_leading_zeroes() {
+        let value = "080310001000001";
+        assert_eq!(
+            GeoidType::Block
+                .geoid_from_str(value)
+                .unwrap()
+                .geoid_string(),
+            value
+        );
+    }
 }
