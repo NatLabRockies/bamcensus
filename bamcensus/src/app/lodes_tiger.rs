@@ -74,7 +74,7 @@ pub struct LodesTigerResponse {
 ///
 /// ```
 pub async fn run(
-    geoids: &Vec<Geoid>,
+    geoids: &[Geoid],
     agg_geoid_type: &Option<GeoidType>,
     wac_segments: &[WacSegment],
     dataset: &LodesDataset,
@@ -86,7 +86,7 @@ pub async fn run(
     // if the user did not provide geoids, use all states
     let filter_geoids = match geoids.len() {
         0 => Geoid::all_states(),
-        _ => geoids.clone(),
+        _ => geoids.to_vec(),
     };
     let state_geoids = filter_geoids
         .iter()

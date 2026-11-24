@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex};
 const MAX_CONCURRENT_REQUESTS: usize = 8;
 
 /// sets up a run of ACS queries.
-pub async fn batch_run<'a>(
+pub async fn batch_run(
     client: &Client,
-    queries: &Vec<AcsApiQueryParams>,
+    queries: &[AcsApiQueryParams],
 ) -> Result<Vec<(Geoid, Vec<AcsValue>)>, String> {
     let pb_builder = kdam::BarBuilder::default()
         .total(queries.len())
