@@ -17,6 +17,7 @@ pub struct AcsTigerResponse {
 
 /// Parameters for querying ACS by GEOIDs or a polygonal region.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AcsRegionQueryParams {
     /// Optional ACS API base URL; defaults to the Census API.
     pub base_url: Option<String>,

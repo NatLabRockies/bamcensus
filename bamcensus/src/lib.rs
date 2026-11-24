@@ -7,8 +7,10 @@ pub mod ops;
 
 #[cfg(all(test, feature = "schemars"))]
 mod schemars_tests {
+    use crate::app::acs_tiger::AcsRegionQueryParams;
     use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType};
     use bamcensus_core::model::identifier::{Geoid, GeoidType, StateCode};
+    use bamcensus_core::model::spatial::{RegionFilter, SpatialPredicate};
     use bamcensus_lehd::model::{
         FallbackPolicy, LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
     };
@@ -50,6 +52,9 @@ mod schemars_tests {
         for schema in [
             geoid_schema,
             serde_json::to_value(schema_for!(StateCode)).unwrap(),
+            serde_json::to_value(schema_for!(SpatialPredicate)).unwrap(),
+            serde_json::to_value(schema_for!(RegionFilter)).unwrap(),
+            serde_json::to_value(schema_for!(AcsRegionQueryParams)).unwrap(),
             serde_json::to_value(schema_for!(AcsApiQueryParams)).unwrap(),
             serde_json::to_value(schema_for!(AcsGeoidQuery)).unwrap(),
             serde_json::to_value(schema_for!(LodesDataset)).unwrap(),

@@ -1,6 +1,6 @@
 use super::SpatialPredicate;
-use crate::model::identifier::Geoid;
-use geo_types::{Geometry, MultiPolygon, Polygon};
+use crate::model::identifier::{Geoid, StateCode};
+use geo_types::{Geometry, MultiPolygon, Polygon, Rect};
 use serde::{Deserialize, Serialize};
 
 /// A selection of explicit GEOIDs or a geographic query region.
@@ -8,17 +8,40 @@ use serde::{Deserialize, Serialize};
 /// Geometry coordinates must be longitude/latitude in EPSG:4269 or EPSG:4326.
 /// Call [`Self::validate`] on directly constructed or deserialized values before use.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum RegionFilter {
     /// Explicit geographic identifiers.
     Geoids(Vec<Geoid>),
     /// Select geometries using a polygonal region and a spatial predicate.
     Geometry {
+        #[cfg_attr(feature = "schemars", schemars(with = "serde_json::Value"))]
         geometry: Geometry<f64>,
         predicate: SpatialPredicate,
     },
 }
 
 impl RegionFilter {
+    /// Create a national region filter covering all 50 US states and the District of Columbia.
+    pub fn national() -> Self {
+        Self::Geoids(StateCode::all_state_geoids())
+    }
+
+    /// Create a polygonal region filter from a longitude/latitude bounding box (`Rect<f64>`).
+    pub fn from_rect(rect: Rect<f64>, predicate: SpatialPredicate) -> Result<Self, String> {
+        let min = rect.min();
+        let max = rect.max();
+        if !min.x.is_finite()
+            || !min.y.is_finite()
+            || !max.x.is_finite()
+            || !max.y.is_finite()
+            || min.x >= max.x
+            || min.y >= max.y
+        {
+            return Err("query bounding box must have finite min < max coordinates".to_string());
+        }
+        Self::new_geometry(Geometry::Polygon(rect.to_polygon()), predicate)
+    }
+
     /// Validate a polygonal region and normalize geometry collections to a multipolygon.
     ///
     /// Coordinate ranges do not establish the CRS, and this does not validate polygon topology.
@@ -194,5 +217,26 @@ mod tests {
         }
         .validate()
         .is_err());
+    }
+
+    #[test]
+    fn constructs_national_and_rect_regions() {
+        let national = RegionFilter::national();
+        assert!(matches!(&national, RegionFilter::Geoids(geoids) if geoids.len() == 51));
+        national.validate().unwrap();
+
+        let rect = Rect::new(coord! { x: -105.5, y: 39.5 }, coord! { x: -104.5, y: 40.5 });
+        let region = RegionFilter::from_rect(rect, SpatialPredicate::Intersects).unwrap();
+        region.validate().unwrap();
+        assert!(matches!(
+            region,
+            RegionFilter::Geometry {
+                geometry: Geometry::Polygon(_),
+                predicate: SpatialPredicate::Intersects
+            }
+        ));
+
+        let degenerate = Rect::new(coord! { x: -105.0, y: 39.5 }, coord! { x: -105.0, y: 40.5 });
+        assert!(RegionFilter::from_rect(degenerate, SpatialPredicate::Intersects).is_err());
     }
 }
