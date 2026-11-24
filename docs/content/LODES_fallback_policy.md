@@ -138,6 +138,33 @@ LODES data for year 2023 not available; using 2022 instead
 
 ## Use Cases
 
+### Source-Year Metadata
+
+The CLI keeps the requested year in the CSV filename and writes
+`<output.csv>.metadata.json` alongside it on every successful run, even without
+fallback. The sidecar records the requested year and the year actually downloaded
+for each state, keyed by two-digit state FIPS:
+
+```json
+{
+  "requested_year": 2020,
+  "selected_years": {
+    "02": 2016,
+    "08": 2020
+  }
+}
+```
+
+States skipped after exhausting fallback candidates are omitted. Successful
+downloads are recorded even if subsequent filtering or geometry joins produce no
+rows. No-match polygon queries have an empty `selected_years` map.
+
+Rust workflow responses expose this map as `LodesTigerResponse.selected_years`.
+LEHD callers can use `run_wac_with_fallback_and_metadata` to obtain both `rows`
+and `selected_years`; it rejects queries that select conflicting years for the
+same state. The existing rows-only APIs remain unchanged. Python
+`run_wac_tiger` results include a `source_year` column for each returned row.
+
 ### Multi-State Analysis Spanning Years
 
 Query employment data for Colorado and California across 2023-2025, but automatically fall back to 2022 if data is unavailable:
