@@ -1,4 +1,5 @@
 use bamcensus_core::model::identifier::{fips, Geoid, GeoidType, HasGeoidString};
+use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 
 use super::DeserializeGeoidFn;
@@ -8,7 +9,7 @@ use super::DeserializeGeoidFn;
 /// when running an ACS query at a given GEOID hierarchical level, there are a set
 /// of required (aka, not `Option`al) components which can be coupled with `Option`al
 /// (wildcard) components to construct a query.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum AcsGeoidQuery {
     State(Option<fips::State>),

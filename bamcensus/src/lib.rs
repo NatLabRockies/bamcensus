@@ -2,12 +2,14 @@
 //!
 //! Rust API for the Behavior and Advanced Mobility Census dataset aggregator.
 pub mod app;
+pub mod config;
 pub mod model;
 pub mod ops;
 
 #[cfg(all(test, feature = "schemars"))]
 mod schemars_tests {
     use crate::app::acs_tiger::AcsRegionQueryParams;
+    use crate::config::{AcsTigerConfig, LodesWacTigerConfig};
     use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType};
     use bamcensus_core::model::identifier::{Geoid, GeoidType, StateCode};
     use bamcensus_core::model::spatial::{RegionFilter, SpatialPredicate};
@@ -62,6 +64,8 @@ mod schemars_tests {
             serde_json::to_value(schema_for!(LodesJobType)).unwrap(),
             serde_json::to_value(schema_for!(WacSegment)).unwrap(),
             serde_json::to_value(schema_for!(WorkplaceSegment)).unwrap(),
+            serde_json::to_value(schema_for!(AcsTigerConfig)).unwrap(),
+            serde_json::to_value(schema_for!(LodesWacTigerConfig)).unwrap(),
         ] {
             assert!(schema.is_object());
         }

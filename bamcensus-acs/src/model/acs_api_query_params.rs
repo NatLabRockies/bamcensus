@@ -1,8 +1,9 @@
 use crate::model::{AcsGeoidQuery, AcsType};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 /// parameters for running an ACS call.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AcsApiQueryParams {
     /// optional override URL for ACS query. otherwise defaults to [`super::constants::BASE_URL`]

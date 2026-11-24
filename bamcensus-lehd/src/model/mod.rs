@@ -13,7 +13,7 @@ mod wac_segment;
 mod wac_value;
 mod workplace_segment;
 
-pub use fallback_policy::FallbackPolicy;
+pub use fallback_policy::{FallbackPolicy, DEFAULT_FALLBACK_YEARS};
 pub use lodes_dataset::LodesDataset;
 pub use lodes_edition::LodesEdition;
 pub use lodes_job_type::LodesJobType;

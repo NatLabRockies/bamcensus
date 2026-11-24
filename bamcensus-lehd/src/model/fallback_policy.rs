@@ -2,6 +2,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
+/// Default number of earlier years attempted by [`FallbackPolicy::default`].
+pub const DEFAULT_FALLBACK_YEARS: u64 = 10;
+
 /// Defines how LODES API download failures should be handled for a given state/year combination.
 ///
 /// The LODES dataset does not have complete coverage across all states and years. This enum
@@ -11,6 +14,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// ```rust
 /// use bamcensus_lehd::model::FallbackPolicy;
+///
+/// // Default policy: try up to 10 earlier years
+/// let policy = FallbackPolicy::default();
+/// assert_eq!(policy, FallbackPolicy::TryPreviousYears(10));
 ///
 /// // Always fail if a download is not available
 /// let policy = FallbackPolicy::FailAlways;
@@ -24,11 +31,10 @@ use serde::{Deserialize, Serialize};
 /// // Try 2 years back or 1 year forward
 /// let policy = FallbackPolicy::BiDirectional { past: 2, future: 1 };
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum FallbackPolicy {
     /// Do not retry; fail immediately if the requested state/year is unavailable
-    #[default]
     FailAlways,
     /// If the requested year fails, try N years earlier
     TryPreviousYears(u64),
@@ -36,6 +42,12 @@ pub enum FallbackPolicy {
     TryNextYears(u64),
     /// If the requested year fails, try up to N years earlier or M years later
     BiDirectional { past: u64, future: u64 },
+}
+
+impl Default for FallbackPolicy {
+    fn default() -> Self {
+        FallbackPolicy::TryPreviousYears(DEFAULT_FALLBACK_YEARS)
+    }
 }
 
 impl FallbackPolicy {
@@ -144,6 +156,14 @@ impl std::str::FromStr for FallbackPolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_default_fallback_policy() {
+        assert_eq!(
+            FallbackPolicy::default(),
+            FallbackPolicy::TryPreviousYears(DEFAULT_FALLBACK_YEARS)
+        );
+    }
 
     #[test]
     fn test_candidate_years_fail_always() {
