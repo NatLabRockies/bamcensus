@@ -9,9 +9,7 @@ A high-performance toolkit written in Rust for downloading, aggregating, and spa
 
 `bamcensus` addresses scaling limitations found in existing tools, such as R's [tidycensus](https://walker-data.com/tidycensus/), by providing concurrent batch downloads, hierarchical GEOID aggregation, and geometry joins between US Census tabular datasets (ACS and LEHD/LODES) and their corresponding geometries hosted on the Census TIGER/Line servers.
 
-Its primary motivation stems from the need for a high-performance solution to combine spatial Census datasets with graph traversals within the context of mobility analysis tooling being developed at NLR's Behavior and Advanced Mobility (BAM) group.
-
-## Key Features
+Its primary motivation stems from the need for a high-performance solution to combine spatial Census datasets with graph traversals within the context of mobility analysis tooling being developed at NLR's Behavior and Advanced Mobility (BAM) group. Its key features include:
 
 - **Extensible Algebraic Data Types (ADTs)** for representing Census, ACS, LEHD/LODES, FIPS, and TIGER/Line taxonomies.
 - **Automated TIGER/Line Geometry Joins** with geometries typed via `geo-types` and exported as WKT or `geopandas.GeoDataFrame`.
@@ -46,6 +44,11 @@ Across the CLI, Rust API, and Python API, you specify:
 - **CLI & Rust API**: See [`bamcensus/README.md`](./bamcensus/README.md)
 - **Python API**: See [`bamcensus-py/README.md`](./bamcensus-py/README.md) and the notebooks in [`examples/`](./examples/)
 - **LODES Fallback Policies**: See [`docs/content/LODES_fallback_policy.md`](./docs/content/LODES_fallback_policy.md)
+
+## Feature flags
+
+  - `schemars`: JsonSchema implementations.
+
 
 ## Roadmap
 
