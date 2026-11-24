@@ -67,4 +67,3 @@ mod schemars_tests {
         }
     }
 }
-
