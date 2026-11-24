@@ -73,7 +73,7 @@ pub struct AcsRegionQueryParams {
 /// # })
 /// ```
 pub async fn run(query: &AcsApiQueryParams) -> Result<AcsTigerResponse, String> {
-    run_batch(&[query.clone()]).await
+    run_batch(std::slice::from_ref(query)).await
 }
 
 pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse, String> {
