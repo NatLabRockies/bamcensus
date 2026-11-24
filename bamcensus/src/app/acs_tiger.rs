@@ -72,10 +72,10 @@ pub struct AcsRegionQueryParams {
 /// # })
 /// ```
 pub async fn run(query: &AcsApiQueryParams) -> Result<AcsTigerResponse, String> {
-    run_batch(&vec![query.clone()]).await
+    run_batch(&[query.clone()]).await
 }
 
-pub async fn run_batch(queries: &Vec<AcsApiQueryParams>) -> Result<AcsTigerResponse, String> {
+pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse, String> {
     let client: Client = Client::new();
 
     // todo: run tiger downloads for all requested years
