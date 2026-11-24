@@ -25,6 +25,7 @@ kdam = "0.6.4"
 log = "0.4.35"
 rayon = "1.12.0"
 reqwest = { version = "0.13.5", features = ["json"] }
+schemars = "*"
 serde = { version = "1.0.209", features = ["derive"] }
 serde_json = { version = "1.0.154" }
 shapefile = { version = "0.9.0", features = ["geo-types"] }

@@ -8,6 +8,9 @@ description = "Work with Longitudinal Employer-Household Dynamics (LEHD) dataset
 repository = "https://github.com/NLR/bamcensus"
 documentation = "https://docs.rs/bamcensus-lehd"
 
+[features]
+schemars = ["dep:schemars", "bamcensus-core/schemars"]
+
 [dependencies]
 bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
 clap = { workspace = true }
@@ -19,5 +22,6 @@ itertools = { workspace = true }
 kdam = { workspace = true }
 rayon = { workspace = true }
 reqwest = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 tokio = { workspace = true }

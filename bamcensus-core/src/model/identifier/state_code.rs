@@ -2,6 +2,7 @@ use crate::model::identifier::{fips::State, has_geoid_string::HasGeoidString, Ge
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StateCode {
     Alabama,

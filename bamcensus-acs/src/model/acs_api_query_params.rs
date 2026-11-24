@@ -3,6 +3,7 @@ use itertools::Itertools;
 
 /// parameters for running an ACS call.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AcsApiQueryParams {
     /// optional override URL for ACS query. otherwise defaults to [`super::constants::BASE_URL`]
     pub base_url: Option<String>,

@@ -5,36 +5,47 @@ use super::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct State(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct County(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct CountySubdivision(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Place(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct CensusTract(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct BlockGroup(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct Block(pub String);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct CongressionalDistrict(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct StateLegislativeDistrictUpperChamber(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct StateLegislativeDistrictLowerChamber(pub u64);
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ZipCodeTabulationArea(pub u64);
 
 impl HasGeoidType for State {

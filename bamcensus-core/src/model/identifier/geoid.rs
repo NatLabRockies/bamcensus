@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum Geoid {
     State(fips::State),
     County(fips::State, fips::County),
