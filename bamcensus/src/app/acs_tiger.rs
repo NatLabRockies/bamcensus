@@ -3,11 +3,11 @@ use bamcensus_acs::api::acs_api;
 use bamcensus_acs::model::{AcsApiQueryParams, AcsGeoidQuery, AcsType, AcsValue};
 use bamcensus_core::model::identifier::{Geoid, GeoidType};
 use bamcensus_core::model::spatial::RegionFilter;
+use bamcensus_core::ops::http::{build_retry_client, ClientWithMiddleware};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::{spatial_resolver, tiger_api};
 use geo::Geometry;
 use itertools::Itertools;
-use reqwest::Client;
 
 pub struct AcsTigerResponse {
     pub join_dataset: Vec<AcsTigerRow>,
@@ -76,9 +76,24 @@ pub async fn run(query: &AcsApiQueryParams) -> Result<AcsTigerResponse, String> 
     run_batch(std::slice::from_ref(query)).await
 }
 
-pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse, String> {
-    let client: Client = Client::new();
+/// Run a single query using the supplied client for both ACS and TIGER requests.
+pub async fn run_with_client(
+    client: &ClientWithMiddleware,
+    query: &AcsApiQueryParams,
+) -> Result<AcsTigerResponse, String> {
+    run_batch_with_client(client, std::slice::from_ref(query)).await
+}
 
+pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse, String> {
+    let client = build_retry_client();
+    run_batch_with_client(&client, queries).await
+}
+
+/// Run a batch using the supplied client for all ACS and TIGER requests.
+pub async fn run_batch_with_client(
+    client: &ClientWithMiddleware,
+    queries: &[AcsApiQueryParams],
+) -> Result<AcsTigerResponse, String> {
     // todo: run tiger downloads for all requested years
     let year = match &queries.iter().map(|q| q.year).unique().collect_vec()[..] {
         [one_year] => Ok(*one_year),
@@ -88,12 +103,12 @@ pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse
         )),
     }?;
 
-    let acs_rows = acs_api::batch_run(&client, queries).await?;
+    let acs_rows = acs_api::batch_run(client, queries).await?;
 
     // execute TIGER/Lines downloads
     let tiger_uri_builder = TigerResourceBuilder::new(year)?;
     let geoids = &acs_rows.iter().map(|(geoid, _)| geoid).collect_vec();
-    let tiger_response = tiger_api::run(&client, &tiger_uri_builder, geoids).await?;
+    let tiger_response = tiger_api::run(client, &tiger_uri_builder, geoids).await?;
 
     type NestedResult = (Vec<Vec<(Geoid, Geometry<f64>)>>, Vec<String>);
     let (tiger_rows_nested, tiger_errors): NestedResult =
@@ -109,6 +124,16 @@ pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse
 /// portion inside the polygon. TIGER spatial calculations are planar; see
 /// [`spatial_resolver::resolve_polygon`] for their CRS and geometry requirements.
 pub async fn run_region(params: &AcsRegionQueryParams) -> Result<AcsTigerResponse, String> {
+    let client = build_retry_client();
+    run_region_with_client(&client, params).await
+}
+
+/// Query a region using the supplied client for ACS and TIGER, including
+/// polygon resolution. Configure it with [`bamcensus_core::ops::http::build_client`].
+pub async fn run_region_with_client(
+    client: &ClientWithMiddleware,
+    params: &AcsRegionQueryParams,
+) -> Result<AcsTigerResponse, String> {
     match &params.region {
         RegionFilter::Geoids(geoids) => {
             let queries = if geoids.is_empty() {
@@ -119,7 +144,7 @@ pub async fn run_region(params: &AcsRegionQueryParams) -> Result<AcsTigerRespons
                     .map(|geoid| AcsGeoidQuery::new(Some(geoid.clone()), params.output_resolution))
                     .collect::<Result<Vec<_>, _>>()?
             };
-            run_batch(&acs_query_params(params, queries)).await
+            run_batch_with_client(client, &acs_query_params(params, queries)).await
         }
         RegionFilter::Geometry {
             geometry,
@@ -131,16 +156,15 @@ pub async fn run_region(params: &AcsRegionQueryParams) -> Result<AcsTigerRespons
             if target == GeoidType::Block {
                 return Err("ACS does not support block-level queries".to_string());
             }
-            let client = Client::new();
             let builder = TigerResourceBuilder::new(params.year)?;
             let resolved =
-                spatial_resolver::resolve_polygon(&client, &builder, geometry, target, *predicate)
+                spatial_resolver::resolve_polygon(client, &builder, geometry, target, *predicate)
                     .await?;
             if resolved.matched_geometries.is_empty() {
                 return finish_response(Vec::new(), Vec::new(), Vec::new());
             }
             let queries = spatial_acs_queries(target, &resolved.matched_geometries)?;
-            let rows = acs_api::batch_run(&client, &acs_query_params(params, queries)).await?;
+            let rows = acs_api::batch_run(client, &acs_query_params(params, queries)).await?;
             let rows = crate::ops::join::filter_to_geometries(rows, &resolved.matched_geometries);
             finish_response(rows, vec![resolved.matched_geometries], Vec::new())
         }

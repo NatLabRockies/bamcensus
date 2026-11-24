@@ -7,7 +7,7 @@ use geo_types::Geometry;
 use itertools::Itertools;
 use kdam::BarExt;
 use log;
-use reqwest::Client;
+use reqwest_middleware::ClientWithMiddleware;
 use shapefile::dbase::Record;
 use shapefile::{dbase, Shape, ShapeReader};
 use std::collections::HashSet;
@@ -28,7 +28,7 @@ const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 /// tooling to stream these data sources, so here we chose to download
 /// the archives, unpack, and then load from the extracted file paths.
 pub async fn run(
-    client: &Client,
+    client: &ClientWithMiddleware,
     builder: &TigerResourceBuilder,
     geoids: &[&Geoid],
 ) -> Result<Vec<Result<Vec<(Geoid, Geometry)>, String>>, String> {
@@ -72,7 +72,7 @@ pub async fn run(
 }
 
 pub(crate) async fn read_resource<T>(
-    client: &Client,
+    client: &ClientWithMiddleware,
     resource: &TigerResource,
     select: impl Fn(Shape, Record) -> Result<Option<T>, String>,
 ) -> Result<Vec<T>, String> {
@@ -95,7 +95,10 @@ pub(crate) async fn read_resource<T>(
     Ok(result)
 }
 
-async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<File, String> {
+async fn get_or_download_tiger_zip(
+    client: &ClientWithMiddleware,
+    uri: &str,
+) -> Result<File, String> {
     if let Some(cache_path) = tiger_cache_path(uri) {
         return get_or_download_cached(client, uri, &cache_path).await;
     }
@@ -117,7 +120,7 @@ async fn get_or_download_tiger_zip(client: &Client, uri: &str) -> Result<File, S
 }
 
 async fn get_or_download_cached(
-    client: &Client,
+    client: &ClientWithMiddleware,
     uri: &str,
     cache_path: &std::path::Path,
 ) -> Result<File, String> {
@@ -245,7 +248,11 @@ pub(crate) fn get_geoid_from_record(
     Ok(geoid)
 }
 
-async fn download(client: &Client, uri: &str, write_file: File) -> Result<(), String> {
+async fn download(
+    client: &ClientWithMiddleware,
+    uri: &str,
+    write_file: File,
+) -> Result<(), String> {
     let mut async_file = tokio::fs::File::from(write_file);
 
     let mut response = client
@@ -368,13 +375,14 @@ mod tests {
     #[tokio::test]
     async fn failed_responses_do_not_poison_cache() {
         let dir = tempfile::tempdir().unwrap();
+        let client = bamcensus_core::ops::http::build_retry_client();
         for (status, body) in [
             ("404 Not Found", b"missing".to_vec()),
             ("200 OK", b"not a zip".to_vec()),
         ] {
             let (uri, server) = serve_responses(status, body, 1).await;
             let cache = dir.path().join("archive.zip");
-            let result = get_or_download_cached(&Client::new(), &uri, &cache).await;
+            let result = get_or_download_cached(&client, &uri, &cache).await;
             assert!(result.is_err());
             assert!(!cache.exists());
             server.await.unwrap();
@@ -388,7 +396,7 @@ mod tests {
         let cache = dir.path().join("archive.zip");
         let bytes = archive_bytes();
         let (uri, server) = serve_responses("200 OK", bytes.clone(), 2).await;
-        let client = Client::new();
+        let client = bamcensus_core::ops::http::build_retry_client();
         let (first, second) = tokio::join!(
             get_or_download_cached(&client, &uri, &cache),
             get_or_download_cached(&client, &uri, &cache)

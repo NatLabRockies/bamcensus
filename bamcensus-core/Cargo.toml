@@ -16,6 +16,13 @@ clap = { workspace = true }
 derive_more = { workspace = true }
 geo-types = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+

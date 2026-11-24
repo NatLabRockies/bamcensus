@@ -2,6 +2,7 @@ use bamcensus::app::{acs_tiger, lodes_tiger};
 use bamcensus_acs::model::AcsType;
 use bamcensus_core::model::identifier::{Geoid, GeoidType, HasGeoidString};
 use bamcensus_core::model::spatial::{RegionFilter, SpatialPredicate};
+use bamcensus_core::ops::http::{build_client, ExponentialBackoff, RetryConfig};
 use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, WacSegment};
 use geo::{polygon, Geometry, Polygon};
 use shapefile::dbase::{FieldValue, Record, TableWriterBuilder};
@@ -73,7 +74,7 @@ fn polygon_acs_joins_cached_geometries_and_filters_wildcard_results() {
             let base_url = format!("http://{}", listener.local_addr().unwrap());
             let server = tokio::spawn(async move {
                 let mut requests = Vec::new();
-                for _ in 0..2 {
+                for attempt in 0..6 {
                     let (mut socket, _) = listener.accept().await.unwrap();
                     let mut reader = BufReader::new(&mut socket);
                     let mut line = String::new();
@@ -90,7 +91,11 @@ fn polygon_acs_joins_cached_geometries_and_filters_wildcard_results() {
                     } else {
                         format!("{header}]")
                     };
-                    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                    let response = if matches!(attempt, 0 | 1 | 3 | 4) {
+                        "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_string()
+                    } else {
+                        format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
+                    };
                     socket.write_all(response.as_bytes()).await.unwrap();
                 }
                 requests
@@ -104,7 +109,15 @@ fn polygon_acs_joins_cached_geometries_and_filters_wildcard_results() {
                 output_resolution: Some(GeoidType::CensusTract),
                 acs_token: None,
             };
-            let spatial = acs_tiger::run_region(&params).await.unwrap();
+            let disabled = build_client(RetryConfig::Disabled);
+            let custom = build_client(RetryConfig::Custom {
+                builder: ExponentialBackoff::builder()
+                    .retry_bounds(Duration::from_millis(1), Duration::from_millis(10)),
+                max_retries: 1,
+            });
+            let error = acs_tiger::run_region_with_client(&disabled, &params).await.err().unwrap();
+            assert!(error.contains("503"));
+            let spatial = acs_tiger::run_region_with_client(&custom, &params).await.unwrap();
             assert!(spatial.tiger_errors.is_empty() && spatial.join_errors.is_empty());
             assert_eq!(spatial.join_dataset.len(), 2);
             assert!(spatial.join_dataset.iter().all(|row| row.geoid.geoid_string() == "08031000100"));
@@ -113,13 +126,16 @@ fn polygon_acs_joins_cached_geometries_and_filters_wildcard_results() {
 
             params.region = RegionFilter::Geoids(vec![Geoid::try_from("08031000100").unwrap()]);
             params.output_resolution = None;
-            let explicit = acs_tiger::run_region(&params).await.unwrap();
+            let error = acs_tiger::run_region_with_client(&disabled, &params).await.err().unwrap();
+            assert!(error.contains("503"));
+            let explicit = acs_tiger::run_region_with_client(&custom, &params).await.unwrap();
             assert_eq!(explicit.join_dataset.len(), 2);
             assert_eq!(explicit.join_dataset[0].geometry, spatial.join_dataset[0].geometry);
             assert_eq!(explicit.join_dataset[1].acs_value.value, spatial.join_dataset[1].acs_value.value);
             let requests = tokio::time::timeout(Duration::from_secs(5), server).await.unwrap().unwrap();
-            assert!(requests[0].contains("&for=tract:*&in=state:08&in=county:031"));
-            assert!(requests[1].contains("&for=tract:000100&in=state:08&in=county:031"));
+            assert_eq!(requests.len(), 6);
+            assert!(requests[..3].iter().all(|request| request.contains("&for=tract:*&in=state:08&in=county:031")));
+            assert!(requests[3..].iter().all(|request| request.contains("&for=tract:000100&in=state:08&in=county:031")));
 
             params.base_url = Some("http://127.0.0.1:1".to_string());
             params.region = region(square(6.0, 6.0, 7.0, 7.0), SpatialPredicate::Within);

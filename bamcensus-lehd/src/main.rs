@@ -1,5 +1,6 @@
 use bamcensus_core::model::identifier::{Geoid, GeoidType};
 use bamcensus_core::ops::agg::NumericAggregation;
+use bamcensus_core::ops::http::build_retry_client;
 use bamcensus_lehd::api::lodes_api;
 use bamcensus_lehd::model::{
     LodesDataset, LodesEdition, LodesJobType, WacSegment, WorkplaceSegment,
@@ -73,7 +74,7 @@ async fn main() {
         .unwrap();
 
     println!("executing LODES download");
-    let client = reqwest::Client::new();
+    let client = build_retry_client();
     let agg_rows = lodes_api::run_wac(
         &client,
         &queries,

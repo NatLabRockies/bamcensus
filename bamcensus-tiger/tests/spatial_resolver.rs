@@ -1,5 +1,6 @@
 use bamcensus_core::model::identifier::{fips, Geoid, GeoidType, HasGeoidString};
 use bamcensus_core::model::spatial::SpatialPredicate;
+use bamcensus_core::ops::http::{build_retry_client, build_retry_client_from, DEFAULT_MAX_RETRIES};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::{
     geometry_io::parse_geometry_input, spatial_resolver::resolve_polygon, tiger_api,
@@ -113,10 +114,13 @@ fn build_fixtures(root: &Path) {
 fn resolves_cached_archives_offline_for_both_vintages() {
     const CHILD: &str = "BAMCENSUS_TEST_SPATIAL_CHILD";
     if std::env::var_os(CHILD).is_some() {
-        let client = reqwest::Client::builder()
-            .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
-            .build()
-            .unwrap();
+        let client = build_retry_client_from(
+            reqwest::Client::builder()
+                .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
+                .build()
+                .unwrap(),
+            DEFAULT_MAX_RETRIES,
+        );
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let query = Geometry::Polygon(square(1.0, 1.0, 4.0, 4.0));
         runtime.block_on(async {
@@ -260,7 +264,7 @@ fn resolves_cached_archives_offline_for_both_vintages() {
 fn resolves_a_real_state_archive() {
     const CHILD: &str = "BAMCENSUS_TEST_SPATIAL_NETWORK_CHILD";
     if std::env::var_os(CHILD).is_some() {
-        let client = reqwest::Client::new();
+        let client = build_retry_client();
         let query = Geometry::Polygon(square(-104.99, 39.74, -104.98, 39.75));
         let builder = TigerResourceBuilder::new(2020).unwrap();
         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -282,10 +286,13 @@ fn resolves_a_real_state_archive() {
                     .collect::<Vec<_>>(),
                 vec!["08"]
             );
-            let offline_client = reqwest::Client::builder()
-                .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
-                .build()
-                .unwrap();
+            let offline_client = build_retry_client_from(
+                reqwest::Client::builder()
+                    .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
+                    .build()
+                    .unwrap(),
+                DEFAULT_MAX_RETRIES,
+            );
             let cached = resolve_polygon(
                 &offline_client,
                 &builder,

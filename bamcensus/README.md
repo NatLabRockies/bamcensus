@@ -61,6 +61,37 @@ at the antimeridian. Predicates, including area overlap, are planar in
 longitude/latitude rather than equal-area or geodesic. See the
 [TIGER README](../bamcensus-tiger/README.md) for parsing and predicate details.
 
+## Rust HTTP retry configuration
+
+Existing `run`, `run_batch`, and `run_region` workflows keep their default
+three-retry exponential-backoff policy. To disable retries or customize the
+backoff, build a client using
+[`bamcensus-core::ops::http`](../bamcensus-core/README.md#http-retries) and pass it to
+`acs_tiger::{run_with_client, run_batch_with_client, run_region_with_client}` or
+`lodes_tiger::{run_with_client, run_region_with_client}`. These variants reuse the
+supplied client for every ACS/LODES and TIGER request, including polygon resolution.
+The lower-level ACS, LODES, and TIGER APIs also accept this client directly.
+
+```rust,no_run
+use bamcensus::app::acs_tiger::{self, AcsRegionQueryParams};
+use bamcensus_core::ops::http::{build_client, ExponentialBackoff, RetryConfig};
+use std::time::Duration;
+
+async fn example(params: &AcsRegionQueryParams) -> Result<(), String> {
+    // Alternatively: RetryConfig::Disabled or RetryConfig::Default.
+    let client = build_client(RetryConfig::Custom {
+        builder: ExponentialBackoff::builder()
+            .retry_bounds(Duration::from_millis(500), Duration::from_secs(30)),
+        max_retries: 5,
+    });
+    let response = acs_tiger::run_region_with_client(&client, params).await?;
+    Ok(())
+}
+```
+
+LODES unavailable-year fallback is separate from HTTP retries and is unchanged.
+CLI and Python entry points continue to use defaults.
+
 ## Installation
 
 Build the command-line applications using Cargo (via [rustup](https://rustup.rs/)):

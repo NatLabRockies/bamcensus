@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.dependencies]
-clap = { version = "4.6.9", features = ["derive", "env"] }
+clap = { version = "4.6.10", features = ["derive", "env"] }
 config = "0.15.27"
 csv = { version = "1.4.0" }
 derive_more = { version = "2.1.1", features = ["sum"] }
@@ -25,6 +25,8 @@ kdam = "0.6.4"
 log = "0.4.35"
 rayon = "1.12.0"
 reqwest = { version = "0.13.5", features = ["json"] }
+reqwest-middleware = { version = "0.5.2", features = ["json"] }
+reqwest-retry = "0.9.1"
 schemars = "1.2.3"
 serde = { version = "1.0.209", features = ["derive"] }
 serde_json = { version = "1.0.154" }
