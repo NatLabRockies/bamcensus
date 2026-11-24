@@ -43,9 +43,12 @@ mod schemars_tests {
         assert!(fallback_json.contains("TryNextYears"));
         assert!(fallback_json.contains("BiDirectional"));
 
+        let geoid_schema = serde_json::to_value(schema_for!(Geoid)).unwrap();
+        assert_eq!(geoid_schema["type"], serde_json::json!("string"));
+
         // Verify all other requested types generate valid non-empty schemas
         for schema in [
-            serde_json::to_value(schema_for!(Geoid)).unwrap(),
+            geoid_schema,
             serde_json::to_value(schema_for!(StateCode)).unwrap(),
             serde_json::to_value(schema_for!(AcsApiQueryParams)).unwrap(),
             serde_json::to_value(schema_for!(AcsGeoidQuery)).unwrap(),

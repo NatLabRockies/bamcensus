@@ -5,6 +5,7 @@ use std::fmt::Display;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(try_from = "String", into = "String")]
 pub enum Geoid {
     State(fips::State),
     County(fips::State, fips::County),
@@ -34,6 +35,20 @@ impl TryFrom<&str> for Geoid {
             x if x == 15 || x == 16 => GeoidType::Block.geoid_from_str(value),
             x => Err(format!("unsupported GEOID type with length {x}: {value}")),
         }
+    }
+}
+
+impl TryFrom<String> for Geoid {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
+impl From<Geoid> for String {
+    fn from(value: Geoid) -> Self {
+        value.geoid_string()
     }
 }
 
@@ -316,5 +331,28 @@ mod tests {
 
         assert!(bg.is_parent_of(&matching_block));
         assert!(!bg.is_parent_of(&non_matching_block));
+    }
+
+    #[test]
+    fn test_geoid_serde_uses_canonical_fips_strings() {
+        let raw = r#"["08","08013","08031000100","080310001001001"]"#;
+        let geoids: Vec<Geoid> = serde_json::from_str(raw).unwrap();
+        assert_eq!(
+            geoids,
+            vec![
+                Geoid::State(fips::State(8)),
+                Geoid::County(fips::State(8), fips::County(13)),
+                Geoid::CensusTract(fips::State(8), fips::County(31), fips::CensusTract(100)),
+                Geoid::Block(
+                    fips::State(8),
+                    fips::County(31),
+                    fips::CensusTract(100),
+                    fips::Block("1001".to_string())
+                ),
+            ]
+        );
+        assert_eq!(serde_json::to_string(&geoids).unwrap(), raw);
+        assert!(serde_json::from_str::<Geoid>(r#""123""#).is_err());
+        assert!(serde_json::from_str::<Geoid>(r#""08abc""#).is_err());
     }
 }
