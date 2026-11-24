@@ -147,6 +147,27 @@ fn polygon_acs_joins_cached_geometries_and_filters_wildcard_results() {
             let no_match = region(square(20.0, 20.0, 21.0, 21.0), SpatialPredicate::Within);
             let empty = lodes_tiger::run_region(&no_match, &Some(GeoidType::County), &[WacSegment::C000], &dataset, FallbackPolicy::FailAlways).await.unwrap();
             assert!(empty.join_dataset.is_empty() && empty.tiger_errors.is_empty() && empty.join_errors.is_empty());
+            assert!(empty.selected_years.is_empty());
+
+            let output_dir = tempfile::tempdir().unwrap();
+            let output = Command::new(env!("CARGO_BIN_EXE_lodes_tiger_app"))
+                .current_dir(output_dir.path())
+                .args([
+                    "wac", "--year=2021", "--output-resolution=county",
+                    "--polygon=POLYGON ((20 20, 21 20, 21 21, 20 21, 20 20))",
+                    "--fallback=try_2_years_back",
+                ])
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            let filename = dataset.output_filename(&Some(GeoidType::County));
+            assert!(output_dir.path().join(&filename).exists());
+            let metadata: serde_json::Value = serde_json::from_slice(
+                &fs::read(output_dir.path().join(format!("{filename}.metadata.json"))).unwrap()
+            ).unwrap();
+            assert_eq!(metadata, serde_json::json!({
+                "requested_year": 2021, "selected_years": {},
+            }));
 
             let territory = region(square(11.0, 11.0, 15.0, 15.0), SpatialPredicate::Within);
             let unsupported = lodes_tiger::run_region(&territory, &Some(GeoidType::County), &[WacSegment::C000], &dataset, FallbackPolicy::FailAlways).await.unwrap();

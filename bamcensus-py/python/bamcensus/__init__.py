@@ -114,7 +114,7 @@ def _require_api():
 
 
 def run_wac_tiger(year: int, **kwds) -> gpd.GeoDataFrame:
-    """Query LODES WAC data and join with TIGER/Line geometries for GEOIDs or a polygon."""
+    """Query LODES WAC + TIGER data, with the actual LODES vintage in ``source_year``."""
     normalized = _normalize_kwargs(kwds)
     data = _require_api().run_wac_tiger_python(year, **normalized)
     df = pd.DataFrame.from_records(data)

@@ -10,12 +10,16 @@ use bamcensus_tiger::ops::{spatial_resolver, tiger_api};
 use geo::Geometry;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Serialize, Deserialize)]
 pub struct LodesTigerResponse {
     pub join_dataset: Vec<LodesWacTigerRow>,
     pub tiger_errors: Vec<String>,
     pub join_errors: Vec<String>,
+    /// Successful LODES source years keyed by two-digit state FIPS; skipped states are omitted.
+    #[serde(default)]
+    pub selected_years: BTreeMap<String, u64>,
 }
 
 /// runs a LODES WAC query combined with TIGER geography data. the result will include a list of
@@ -125,7 +129,7 @@ pub async fn run_with_client(
 
     // execute LODES downloads with fallback policy
 
-    let lodes_rows = lodes_api::run_wac_with_fallback(
+    let lodes_response = lodes_api::run_wac_with_fallback_and_metadata(
         client,
         &lodes_queries,
         wac_segments,
@@ -136,7 +140,7 @@ pub async fn run_with_client(
 
     // filter result. LODES collects by State. here we only accept rows that match
     // the input geoids or where the input geoids are the (FIPS hierarchical) parent.
-    let lodes_filtered = filter_rows_by_geoids(lodes_rows, &filter_geoids);
+    let lodes_filtered = filter_rows_by_geoids(lodes_response.rows, &filter_geoids);
 
     // execute TIGER/Lines downloads selecting a data vintage based on the LODES edition chosen
     let tiger_year = dataset.tiger_year();
@@ -148,7 +152,12 @@ pub async fn run_with_client(
     let (tiger_rows_nested, tiger_errors): NestedResult =
         tiger_response.into_iter().partition_result();
 
-    finish_response(lodes_filtered, tiger_rows_nested, tiger_errors)
+    finish_response(
+        lodes_filtered,
+        tiger_rows_nested,
+        tiger_errors,
+        lodes_response.selected_years,
+    )
 }
 
 /// Run a LODES WAC query for explicit GEOIDs or a polygonal region.
@@ -217,14 +226,24 @@ pub async fn run_region_with_client(
         spatial_resolver::resolve_polygon(client, &builder, geometry, target, *predicate).await?;
     let (queries, tiger_errors) = spatial_lodes_queries(dataset, &resolved.matched_geometries);
     if queries.is_empty() {
-        return finish_response(Vec::new(), Vec::new(), tiger_errors);
+        return finish_response(Vec::new(), Vec::new(), tiger_errors, BTreeMap::new());
     }
     let agg = agg_geoid_type.map(|g| (g, bamcensus_core::ops::agg::NumericAggregation::Sum));
-    let rows =
-        lodes_api::run_wac_with_fallback(client, &queries, wac_segments, agg, fallback_policy)
-            .await?;
-    let rows = crate::ops::join::filter_to_geometries(rows, &resolved.matched_geometries);
-    finish_response(rows, vec![resolved.matched_geometries], tiger_errors)
+    let response = lodes_api::run_wac_with_fallback_and_metadata(
+        client,
+        &queries,
+        wac_segments,
+        agg,
+        fallback_policy,
+    )
+    .await?;
+    let rows = crate::ops::join::filter_to_geometries(response.rows, &resolved.matched_geometries);
+    finish_response(
+        rows,
+        vec![resolved.matched_geometries],
+        tiger_errors,
+        response.selected_years,
+    )
 }
 
 fn spatial_lodes_queries(
@@ -250,6 +269,7 @@ fn finish_response(
     lodes_filtered: Vec<(Geoid, Vec<WacValue>)>,
     tiger_rows_nested: Vec<Vec<(Geoid, Geometry<f64>)>>,
     tiger_errors: Vec<String>,
+    selected_years: BTreeMap<String, u64>,
 ) -> Result<LodesTigerResponse, String> {
     let (join_dataset, join_errors) =
         crate::ops::join::dataset_with_geometries(lodes_filtered, tiger_rows_nested)?;
@@ -266,6 +286,7 @@ fn finish_response(
         join_dataset: output_dataset,
         tiger_errors,
         join_errors,
+        selected_years,
     };
     Ok(result)
 }
@@ -328,11 +349,14 @@ mod tests {
         .unwrap();
         let geometries = vec![(Geoid::try_from("08031000100").unwrap(), geometry())];
         let selected = crate::ops::join::filter_to_geometries(aggregated, &geometries);
-        let result = finish_response(selected, vec![geometries], vec![]).unwrap();
+        let selected_years = BTreeMap::from([("08".to_string(), 2019)]);
+        let result =
+            finish_response(selected, vec![geometries], vec![], selected_years.clone()).unwrap();
         assert_eq!(result.join_dataset.len(), 1);
         assert_eq!(result.join_dataset[0].geoid.geoid_string(), "08031000100");
         assert_eq!(result.join_dataset[0].value.value, 30.0);
         assert!(result.join_errors.is_empty());
+        assert_eq!(result.selected_years, selected_years);
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@ use crate::py_args::{
     get_region_filter,
 };
 use bamcensus::app::lodes_tiger;
+use bamcensus_core::model::identifier::HasGeoidString;
 use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, WacSegment};
 use itertools::Itertools;
 use pyo3::types::PyDict;
@@ -68,6 +69,8 @@ pub fn run_wac_tiger_python<'a>(
         .into_iter()
         .map(|row| {
             let dict = PyDict::new_bound(py);
+            let state = row.geoid.to_state().geoid_string();
+            dict.set_item("source_year", result.selected_years.get(&state).copied())?;
             dict.set_item("geoid", row.geoid.to_string())?;
             dict.set_item("segment", row.value.segment.to_string())?;
             dict.set_item("value", row.value.value)?;
