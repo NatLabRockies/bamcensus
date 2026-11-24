@@ -8,6 +8,7 @@ use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::{spatial_resolver, tiger_api};
 use geo::Geometry;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
 pub struct AcsTigerResponse {
     pub join_dataset: Vec<AcsTigerRow>,
@@ -16,7 +17,7 @@ pub struct AcsTigerResponse {
 }
 
 /// Parameters for querying ACS by GEOIDs or a polygonal region.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AcsRegionQueryParams {
     /// Optional ACS API base URL; defaults to the Census API.

@@ -10,23 +10,23 @@ See [Data Availability](./../../bamcensus-lehd/2026-11-10-data-availability.md) 
 
 ## Fallback Policy Types
 
-### FailAlways (Default)
+### FailAlways
 
 ```
 --fallback fail_always
 ```
 
-Fails immediately if the requested year is unavailable. No retry attempts are made.
+Fails immediately if the requested year is unavailable. No retry attempts are made. This is the default for the CLI and Python `run_wac_tiger` when `--fallback` / `fallback_policy` is omitted.
 
 **Use when:** You need data for a specific year only, or when you want to be aware of gaps in coverage.
 
-### Try Previous Years
+### Try Previous Years (Rust `FallbackPolicy::default()`)
 
 ```
 --fallback try_N_years_back
 ```
 
-If the requested year fails, attempts N years earlier, in reverse chronological order.
+If the requested year fails, attempts N years earlier, in reverse chronological order. In Rust configuration structs (`FallbackPolicy::default()` and `LodesWacTigerConfig`), the default is `FallbackPolicy::TryPreviousYears(10)`.
 
 **Example:** `try_2_years_back` with year 2021 will attempt: 2021 → 2020 → 2019
 
