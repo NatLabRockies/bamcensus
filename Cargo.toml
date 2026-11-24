@@ -10,28 +10,28 @@ members = [
 ]
 
 [workspace.dependencies]
-clap = { version = "4.3.19", features = ["derive", "env"] }
-config = "0.14.0"
-csv = { version = "1.3.0" }
-derive_more = { version = "1.0.0", features = ["sum"] }
-env_logger = "0.11.3"
-flate2 = "1.0.33"
-futures = { version = "0.3.30" }
-geo = { version = "0.28.0", features = ["use-serde"] }
+clap = { version = "4.6.9", features = ["derive", "env"] }
+config = "0.15.27"
+csv = { version = "1.4.0" }
+derive_more = { version = "2.1.1", features = ["sum"] }
+env_logger = "0.11.12"
+flate2 = "1.1.11"
+futures = { version = "0.3.34" }
+geo = { version = "0.33.1", features = ["use-serde"] }
 geo-types = "0.7.13"
-geojson = { version = "0.24.1" }
-itertools = { version = "0.13.0" }
-kdam = "0.5.0"
-log = "0.4.19"
-rayon = "1.10.0"
-reqwest = { version = "0.12.7", features = ["json"] }
+geojson = { version = "1.0.0" }
+itertools = { version = "0.15.0" }
+kdam = "0.6.4"
+log = "0.4.35"
+rayon = "1.12.0"
+reqwest = { version = "0.13.5", features = ["json"] }
 serde = { version = "1.0.209", features = ["derive"] }
-serde_json = { version = "1.0.127" }
-shapefile = { version = "0.6.0", features = ["geo-types"] }
-tempfile = "3.12.0"
-thiserror = "1.0.0"
-tokio = { version = "1.40.0", features = ["full"] }
-tokio-test = "0.4.2"
-tokio-util = { version = "0.7.11", features = ["compat"] }
-wkt = { version = "0.11.0", features = ["serde"] }
-zip = "2.2.0"
+serde_json = { version = "1.0.154" }
+shapefile = { version = "0.9.0", features = ["geo-types"] }
+tempfile = "3.27.0"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-test = "0.4.6"
+tokio-util = { version = "0.7.20", features = ["compat"] }
+wkt = { version = "0.15.0", features = ["serde"] }
+zip = "9.8.2"

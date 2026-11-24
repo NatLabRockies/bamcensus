@@ -274,7 +274,10 @@ async fn download(client: &Client, uri: &str, write_file: File) -> Result<(), St
 fn get_zip_filename(archive: &ZipArchive<File>, suffix: &str) -> Result<String, String> {
     let shp_filename = archive
         .file_names()
-        .find(|s| s.ends_with(suffix))
+        .find_map(|s| match s {
+            Ok(s) if s.ends_with(suffix) => Some(s),
+            _ => None,
+        })
         .ok_or_else(|| format!("no files in archive have '{suffix}' suffix"))?;
     Ok(String::from(shp_filename))
 }
