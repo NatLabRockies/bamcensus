@@ -1,6 +1,6 @@
 [package]
 name = "bamcensus-acs"
-version = "0.2.0"
+version = "0.3.0"
 license = "BSD-3-Clause"
 edition = "2021"
 readme = "README.md"
@@ -12,7 +12,7 @@ documentation = "https://docs.rs/bamcensus-acs"
 schemars = ["dep:schemars", "bamcensus-core/schemars"]
 
 [dependencies]
-bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.3.0" }
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
