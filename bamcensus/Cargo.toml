@@ -1,6 +1,6 @@
 [package]
 name = "bamcensus"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "BSD-3-Clause"
 exclude = ["test", "**/.DS_Store", "target/"]
@@ -20,10 +20,10 @@ schemars = [
 ]
 
 [dependencies]
-bamcensus-acs = { path = "../bamcensus-acs", version = "0.2.0" }
-bamcensus-core = { path = "../bamcensus-core", version = "0.2.0" }
-bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.2.0" }
-bamcensus-tiger = { path = "../bamcensus-tiger", version = "0.2.0" }
+bamcensus-acs = { path = "../bamcensus-acs", version = "0.3.0" }
+bamcensus-core = { path = "../bamcensus-core", version = "0.3.0" }
+bamcensus-lehd = { path = "../bamcensus-lehd", version = "0.3.0" }
+bamcensus-tiger = { path = "../bamcensus-tiger", version = "0.3.0" }
 clap = { workspace = true }
 csv = { workspace = true }
 env_logger = { workspace = true }
