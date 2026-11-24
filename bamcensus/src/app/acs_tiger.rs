@@ -17,6 +17,7 @@ pub struct AcsTigerResponse {
 
 /// Parameters for querying ACS by GEOIDs or a polygonal region.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct AcsRegionQueryParams {
     /// Optional ACS API base URL; defaults to the Census API.
     pub base_url: Option<String>,
@@ -72,7 +73,7 @@ pub struct AcsRegionQueryParams {
 /// # })
 /// ```
 pub async fn run(query: &AcsApiQueryParams) -> Result<AcsTigerResponse, String> {
-    run_batch(&[query.clone()]).await
+    run_batch(std::slice::from_ref(query)).await
 }
 
 pub async fn run_batch(queries: &[AcsApiQueryParams]) -> Result<AcsTigerResponse, String> {

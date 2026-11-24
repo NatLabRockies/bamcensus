@@ -6,6 +6,7 @@ use std::fmt::Display;
 // see https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.1.pdf
 
 #[derive(Default, ValueEnum, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "UPPERCASE")]
 pub enum LodesJobType {
     #[default]

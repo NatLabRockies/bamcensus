@@ -9,6 +9,7 @@ use super::DeserializeGeoidFn;
 /// of required (aka, not `Option`al) components which can be coupled with `Option`al
 /// (wildcard) components to construct a query.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum AcsGeoidQuery {
     State(Option<fips::State>),
     County(Option<fips::State>, Option<fips::County>),

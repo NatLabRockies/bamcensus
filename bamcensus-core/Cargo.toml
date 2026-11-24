@@ -8,10 +8,14 @@ description = "Common record types + operations for bamcensus crates"
 repository = "https://github.com/NLR/bamcensus"
 documentation = "https://docs.rs/bamcensus-core"
 
+[features]
+schemars = ["dep:schemars"]
+
 [dependencies]
 clap = { workspace = true }
 derive_more = { workspace = true }
 geo-types = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

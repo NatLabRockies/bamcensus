@@ -3,6 +3,7 @@ use std::{fmt, str::FromStr};
 
 /// Spatial relationship used to select Census geometries for a query region.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum SpatialPredicate {
     /// Select geometries that overlap or touch the region.

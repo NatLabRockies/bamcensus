@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Serialize, Deserialize, ValueEnum, Clone, Copy, Debug)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum AcsType {
     OneYear,

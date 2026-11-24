@@ -2,7 +2,6 @@ use bamcensus_core::model::identifier::{Geoid, GeoidType, StateCode};
 use bamcensus_core::model::spatial::{RegionFilter, SpatialPredicate};
 use bamcensus_tiger::ops::geometry_io::parse_geometry_input;
 use clap::Args;
-use itertools::Itertools;
 use std::str::FromStr;
 
 #[derive(Args, Debug, Clone, Default)]
@@ -88,14 +87,7 @@ impl RegionCliArgs {
         }
 
         if allow_default_all_states {
-            let geoids = StateCode::ALL
-                .iter()
-                .map(|sc| {
-                    let fips = sc.to_fips_string();
-                    Geoid::try_from(fips.as_str()).unwrap()
-                })
-                .collect_vec();
-            Ok(RegionFilter::Geoids(geoids))
+            Ok(RegionFilter::Geoids(StateCode::all_state_geoids()))
         } else {
             Err("either --geoids or --polygon must be provided".to_string())
         }

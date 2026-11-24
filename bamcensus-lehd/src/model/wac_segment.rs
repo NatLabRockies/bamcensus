@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Default, ValueEnum, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "UPPERCASE")]
 pub enum WacSegment {
     #[default]

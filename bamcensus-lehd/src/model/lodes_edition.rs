@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Deserialize, Serialize, ValueEnum, Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "UPPERCASE")]
 pub enum LodesEdition {
     Lodes6,

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Deserialize, Serialize, ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum OdPart {
     Main,

@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 /// let policy = FallbackPolicy::BiDirectional { past: 2, future: 1 };
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum FallbackPolicy {
     /// Do not retry; fail immediately if the requested state/year is unavailable
     #[default]

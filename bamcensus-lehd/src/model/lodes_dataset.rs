@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum LodesDataset {
     OD {

@@ -2,6 +2,7 @@ use crate::model::identifier::{fips::State, has_geoid_string::HasGeoidString, Ge
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StateCode {
     Alabama,
@@ -242,6 +243,11 @@ impl StateCode {
         StateCode::Wyoming,
     ];
 
+    /// Returns state-level [`Geoid`]s for all 50 US states and the District of Columbia.
+    pub fn all_state_geoids() -> Vec<Geoid> {
+        Geoid::all_states()
+    }
+
     /// a two-letter state abbreviation
     pub fn to_state_abbreviation(&self) -> String {
         match self {
@@ -424,5 +430,6 @@ mod tests {
             assert_eq!(abbr, abbr.to_uppercase());
         }
         assert_eq!(StateCode::Kentucky.to_state_abbreviation(), "KY");
+        assert_eq!(StateCode::all_state_geoids(), Geoid::all_states());
     }
 }
