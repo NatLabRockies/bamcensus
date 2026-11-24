@@ -112,19 +112,60 @@ async fn run_wac(args: &LodesTigerWacApi) {
             println!("{row}")
         }
     }
-    let mut writer = csv::WriterBuilder::new()
-        .from_path(dataset.output_filename(&wildcard))
-        .unwrap();
+    let filename = dataset.output_filename(&wildcard);
+    let mut writer = csv::WriterBuilder::new().from_path(&filename).unwrap();
     for row in res.join_dataset {
         let out_row = LodesTigerOutputRow::from(row);
         writer.serialize(out_row).unwrap();
     }
+    writer.flush().unwrap();
+    write_metadata(&filename, dataset.year(), &res.selected_years).unwrap();
+}
+
+fn write_metadata(
+    filename: &str,
+    requested_year: u64,
+    selected_years: &std::collections::BTreeMap<String, u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = serde_json::json!({
+        "requested_year": requested_year,
+        "selected_years": selected_years,
+    });
+    std::fs::write(
+        format!("{filename}.metadata.json"),
+        serde_json::to_string_pretty(&metadata)?,
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bamcensus_core::model::spatial::RegionFilter;
+
+    #[test]
+    fn metadata_sidecar_records_mixed_years_and_overwrites_previous_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let filename = temp.path().join("lodes8_wac_2020_JT00_S000_county.csv");
+        let filename = filename.to_str().unwrap();
+        let years =
+            std::collections::BTreeMap::from([("02".to_string(), 2016), ("08".to_string(), 2020)]);
+        write_metadata(filename, 2020, &years).unwrap();
+        let path = format!("{filename}.metadata.json");
+        let metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            metadata,
+            serde_json::json!({
+                "requested_year": 2020,
+                "selected_years": {"02": 2016, "08": 2020},
+            })
+        );
+        write_metadata(filename, 2020, &Default::default()).unwrap();
+        let metadata: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(metadata["selected_years"], serde_json::json!({}));
+    }
 
     #[test]
     fn lodes_cli_defaults_to_all_states_and_rejects_geoid_polygon_conflict() {

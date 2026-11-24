@@ -94,6 +94,22 @@ class TestBamcensusPythonAdapter(unittest.TestCase):
             self.assertEqual(gdf.iloc[0]["geoid"], "08031000100")
             self.assertEqual(gdf.crs.to_epsg(), 4326)
 
+    def test_wac_wrapper_preserves_source_years(self):
+        poly = box(-105.0, 39.7, -104.9, 39.8)
+        with patch.object(bamcensus, "_require_api") as mock_api:
+            mock_api.return_value.run_wac_tiger_python.return_value = [
+                {"geoid": "02001", "segment": "C000", "value": 10,
+                 "geometry": poly.wkt, "source_year": 2016},
+                {"geoid": "08031", "segment": "C000", "value": 20,
+                 "geometry": poly.wkt, "source_year": 2020},
+            ]
+            result = bamcensus.run_wac_tiger(
+                2020, geoids="02,08", fallback_policy="try_4_years_back"
+            )
+            self.assertIsInstance(result, gpd.GeoDataFrame)
+            self.assertEqual(result["source_year"].tolist(), [2016, 2020])
+            self.assertEqual(result.crs.to_epsg(), 4326)
+
 
 if __name__ == "__main__":
     unittest.main()
