@@ -1,11 +1,11 @@
 use crate::py_args::parse_spatial_predicate;
 use bamcensus_core::model::identifier::{GeoidType, HasGeoidString};
+use bamcensus_core::ops::http::build_retry_client;
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::geometry_io::parse_geometry_input;
 use bamcensus_tiger::ops::spatial_resolver;
 use pyo3::types::{PyDict, PyList};
 use pyo3::{exceptions::PyException, prelude::*};
-use reqwest::Client;
 use wkt::ToWkt;
 
 #[pyfunction]
@@ -42,7 +42,7 @@ pub fn resolve_geoids_python<'a>(
             PyException::new_err(format!("failure creating async rust tokio runtime: {e}"))
         })?;
 
-    let client = Client::new();
+    let client = build_retry_client();
     let resolved = runtime
         .block_on(spatial_resolver::resolve_polygon(
             &client,

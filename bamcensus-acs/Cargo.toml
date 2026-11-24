@@ -19,6 +19,7 @@ itertools = { workspace = true }
 kdam = { workspace = true }
 rayon = { workspace = true }
 reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

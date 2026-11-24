@@ -1,10 +1,10 @@
 use super::region_args::RegionCliArgs;
 use bamcensus_core::model::identifier::{GeoidType, HasGeoidString};
+use bamcensus_core::ops::http::build_retry_client;
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::geometry_io::parse_geometry_input;
 use bamcensus_tiger::ops::spatial_resolver;
 use clap::Parser;
-use reqwest::Client;
 use serde::Serialize;
 use wkt::ToWkt;
 
@@ -52,7 +52,7 @@ impl TigerAppCli {
         let predicate = region_args.parse_predicate().unwrap();
         let geometry = parse_geometry_input(&self.polygon).unwrap();
         let builder = TigerResourceBuilder::new(self.year).unwrap();
-        let client = Client::new();
+        let client = build_retry_client();
         let resolved = spatial_resolver::resolve_polygon(
             &client,
             &builder,

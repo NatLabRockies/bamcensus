@@ -5,7 +5,7 @@ use bamcensus_core::model::spatial::{RegionFilter, SpatialPredicate};
 use futures::{stream, StreamExt, TryStreamExt};
 use geo::{Area, BooleanOps, BoundingRect, Centroid, Contains, Intersects, Relate};
 use geo_types::{Geometry, MultiPolygon, Rect};
-use reqwest::Client;
+use reqwest_middleware::ClientWithMiddleware;
 use shapefile::Shape;
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -27,7 +27,7 @@ pub struct ResolvedRegion {
 /// Coarse parent selection uses bounding boxes, not the requested predicate.
 /// This is conservative even when a geometry's centroid lies outside it.
 pub async fn resolve_polygon(
-    client: &Client,
+    client: &ClientWithMiddleware,
     builder: &TigerResourceBuilder,
     query_geom: &Geometry<f64>,
     target_type: GeoidType,
@@ -129,7 +129,7 @@ pub async fn resolve_polygon(
 
 /// Resolve a polygon to GEOIDs without returning their geometries.
 pub async fn resolve_geoids(
-    client: &Client,
+    client: &ClientWithMiddleware,
     builder: &TigerResourceBuilder,
     query_geom: &Geometry<f64>,
     target_type: GeoidType,
@@ -193,7 +193,7 @@ fn resources_for(
 }
 
 async fn load_resources(
-    client: &Client,
+    client: &ClientWithMiddleware,
     resources: Vec<TigerResource>,
     query: &MultiPolygon<f64>,
     bounds: Rect<f64>,

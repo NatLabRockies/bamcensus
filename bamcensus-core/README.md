@@ -15,3 +15,35 @@ Core types, identifiers, and numeric aggregation operations shared across the [`
   - `SpatialPredicate` supports `intersects`, `centroid_within`, `within`, and `area_overlap:<fraction>` (fraction in `(0, 1]`). Hyphens are also accepted in predicate names. Coordinate checks cannot determine the CRS or validate polygon topology.
 - **`ops::agg`**:
   - [`NumericAggregation`](https://docs.rs/bamcensus-core/latest/bamcensus_core/ops/agg/enum.NumericAggregation.html): Aggregation functions (`Sum`, `Mean`, `Median`) for rolling up values when truncating child GEOIDs to parent geographies.
+
+## HTTP retries
+
+`ops::http::build_client(RetryConfig)` and `build_client_from(reqwest_client, RetryConfig)`
+support three retry options:
+
+- `RetryConfig::Disabled`: no retry middleware.
+- `RetryConfig::Default`: exponential backoff with full jitter, up to three retries
+  after the initial request (four attempts total).
+- `RetryConfig::Custom { builder, max_retries }`: supply an
+  `ExponentialBackoffBuilder` and a retry count. The builder configures interval
+  bounds, jitter, and exponential base; it does not itself hold a retry count.
+
+`ExponentialBackoff`, `ExponentialBackoffBuilder`, `Jitter`, and
+`ClientWithMiddleware` are re-exported from `ops::http`.
+The existing `build_retry_client()` and `build_retry_client_from(client, max_retries)`
+helpers remain available.
+
+```rust
+use bamcensus_core::ops::http::{build_client, ExponentialBackoff, RetryConfig};
+use std::time::Duration;
+
+let client = build_client(RetryConfig::Custom {
+    builder: ExponentialBackoff::builder()
+        .retry_bounds(Duration::from_millis(500), Duration::from_secs(30)),
+    max_retries: 5,
+});
+```
+
+Retries use `reqwest-retry`'s transient HTTP/network error classification.
+Middleware retries request execution, not response-body reads, JSON parsing,
+or archive extraction after a response has been returned.

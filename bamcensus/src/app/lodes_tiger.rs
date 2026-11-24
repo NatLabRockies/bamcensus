@@ -2,13 +2,13 @@ use crate::model::lodes_wac_tiger_row::LodesWacTigerRow;
 use bamcensus_core::model::identifier::Geoid;
 use bamcensus_core::model::identifier::GeoidType;
 use bamcensus_core::model::spatial::RegionFilter;
+use bamcensus_core::ops::http::{build_retry_client, ClientWithMiddleware};
 use bamcensus_lehd::api::lodes_api;
 use bamcensus_lehd::model::{FallbackPolicy, LodesDataset, LodesQuery, WacSegment, WacValue};
 use bamcensus_tiger::model::TigerResourceBuilder;
 use bamcensus_tiger::ops::{spatial_resolver, tiger_api};
 use geo::Geometry;
 use itertools::Itertools;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -80,6 +80,28 @@ pub async fn run(
     dataset: &LodesDataset,
     fallback_policy: FallbackPolicy,
 ) -> Result<LodesTigerResponse, String> {
+    let client = build_retry_client();
+    run_with_client(
+        &client,
+        geoids,
+        agg_geoid_type,
+        wac_segments,
+        dataset,
+        fallback_policy,
+    )
+    .await
+}
+
+/// Run a GEOID query using the supplied client for all LODES and TIGER requests.
+/// HTTP retries are independent of the unavailable-year fallback policy.
+pub async fn run_with_client(
+    client: &ClientWithMiddleware,
+    geoids: &[Geoid],
+    agg_geoid_type: &Option<GeoidType>,
+    wac_segments: &[WacSegment],
+    dataset: &LodesDataset,
+    fallback_policy: FallbackPolicy,
+) -> Result<LodesTigerResponse, String> {
     // input: i have a set of geoids that describe a region. i want to download
     // lodes data and aggregate it to some GeoidType.
     // use the LODES dataset argument to build URIs for all LODES downloads
@@ -103,9 +125,8 @@ pub async fn run(
 
     // execute LODES downloads with fallback policy
 
-    let client: Client = Client::new();
     let lodes_rows = lodes_api::run_wac_with_fallback(
-        &client,
+        client,
         &lodes_queries,
         wac_segments,
         agg,
@@ -121,7 +142,7 @@ pub async fn run(
     let tiger_year = dataset.tiger_year();
     let tiger_uri_builder = TigerResourceBuilder::new(tiger_year)?;
     let lodes_geoids = &lodes_filtered.iter().map(|(geoid, _)| geoid).collect_vec();
-    let tiger_response = tiger_api::run(&client, &tiger_uri_builder, lodes_geoids).await?;
+    let tiger_response = tiger_api::run(client, &tiger_uri_builder, lodes_geoids).await?;
 
     type NestedResult = (Vec<Vec<(Geoid, Geometry<f64>)>>, Vec<String>);
     let (tiger_rows_nested, tiger_errors): NestedResult =
@@ -144,6 +165,28 @@ pub async fn run_region(
     dataset: &LodesDataset,
     fallback_policy: FallbackPolicy,
 ) -> Result<LodesTigerResponse, String> {
+    let client = build_retry_client();
+    run_region_with_client(
+        &client,
+        region,
+        agg_geoid_type,
+        wac_segments,
+        dataset,
+        fallback_policy,
+    )
+    .await
+}
+
+/// Query a region using the supplied client for LODES and TIGER, including
+/// polygon resolution. Configure it with [`bamcensus_core::ops::http::build_client`].
+pub async fn run_region_with_client(
+    client: &ClientWithMiddleware,
+    region: &RegionFilter,
+    agg_geoid_type: &Option<GeoidType>,
+    wac_segments: &[WacSegment],
+    dataset: &LodesDataset,
+    fallback_policy: FallbackPolicy,
+) -> Result<LodesTigerResponse, String> {
     let RegionFilter::Geometry {
         geometry,
         predicate,
@@ -152,7 +195,8 @@ pub async fn run_region(
         let RegionFilter::Geoids(geoids) = region else {
             unreachable!()
         };
-        return run(
+        return run_with_client(
+            client,
             geoids,
             agg_geoid_type,
             wac_segments,
@@ -168,17 +212,16 @@ pub async fn run_region(
     if matches!(target, GeoidType::Place | GeoidType::CountySubdivision) {
         return Err(format!("LODES cannot aggregate blocks to {target}"));
     }
-    let client = Client::new();
     let builder = TigerResourceBuilder::new(dataset.tiger_year())?;
     let resolved =
-        spatial_resolver::resolve_polygon(&client, &builder, geometry, target, *predicate).await?;
+        spatial_resolver::resolve_polygon(client, &builder, geometry, target, *predicate).await?;
     let (queries, tiger_errors) = spatial_lodes_queries(dataset, &resolved.matched_geometries);
     if queries.is_empty() {
         return finish_response(Vec::new(), Vec::new(), tiger_errors);
     }
     let agg = agg_geoid_type.map(|g| (g, bamcensus_core::ops::agg::NumericAggregation::Sum));
     let rows =
-        lodes_api::run_wac_with_fallback(&client, &queries, wac_segments, agg, fallback_policy)
+        lodes_api::run_wac_with_fallback(client, &queries, wac_segments, agg, fallback_policy)
             .await?;
     let rows = crate::ops::join::filter_to_geometries(rows, &resolved.matched_geometries);
     finish_response(rows, vec![resolved.matched_geometries], tiger_errors)

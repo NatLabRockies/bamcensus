@@ -25,7 +25,6 @@ pyo3 = { version = "0.22.2", features = [
     # "experimental-async",
     "abi3-py310",
 ] }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

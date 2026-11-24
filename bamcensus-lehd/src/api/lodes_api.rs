@@ -9,7 +9,7 @@ use flate2::read::GzDecoder;
 use futures::{stream, StreamExt};
 use itertools::Itertools;
 use kdam::BarExt;
-use reqwest::Client;
+use reqwest_middleware::ClientWithMiddleware;
 use std::sync::{Arc, Mutex};
 
 const MAX_CONCURRENT_DOWNLOADS: usize = 8;
@@ -22,7 +22,7 @@ const MAX_CONCURRENT_DOWNLOADS: usize = 8;
 /// - `Ok(None)` if the URL returns a 404 (not found, will trigger fallback)
 /// - `Err(String)` for other errors that should not trigger fallback
 async fn try_fetch_lodes_data(
-    client: &Client,
+    client: &ClientWithMiddleware,
     url: &str,
     wac_segments: &[WacSegment],
 ) -> Result<Option<Vec<(Geoid, Vec<WacValue>)>>, String> {
@@ -81,7 +81,7 @@ async fn try_fetch_lodes_data(
 /// - `Ok(None)` if all candidate queries are unavailable or return 404
 /// - `Err(String)` if a fatal error occurs
 async fn run_with_fallback(
-    client: &Client,
+    client: &ClientWithMiddleware,
     query: &LodesQuery,
     fallback_policy: FallbackPolicy,
     wac_segments: &[WacSegment],
@@ -128,7 +128,7 @@ async fn run_with_fallback(
 /// requested WacSegment. the entire dataset is aggregated to the requested
 /// output GeoidType, which should be
 pub async fn run_wac(
-    client: &Client,
+    client: &ClientWithMiddleware,
     queries: &[LodesQuery],
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,
@@ -153,7 +153,7 @@ pub async fn run_wac(
 /// * `agg` - Optional aggregation specification
 /// * `fallback_policy` - Policy for handling unavailable state/year combinations
 pub async fn run_wac_with_fallback(
-    client: &Client,
+    client: &ClientWithMiddleware,
     queries: &[LodesQuery],
     wac_segments: &[WacSegment],
     agg: Option<(GeoidType, NumericAggregation)>,

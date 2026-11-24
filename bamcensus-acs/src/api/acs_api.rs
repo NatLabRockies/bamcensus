@@ -3,14 +3,15 @@ use bamcensus_core::model::identifier::Geoid;
 use futures::{stream, StreamExt};
 use itertools::Itertools;
 use kdam::BarExt;
-use reqwest::{Client, StatusCode};
+use reqwest::StatusCode;
+use reqwest_middleware::ClientWithMiddleware;
 use std::sync::{Arc, Mutex};
 
 const MAX_CONCURRENT_REQUESTS: usize = 8;
 
 /// sets up a run of ACS queries.
 pub async fn batch_run(
-    client: &Client,
+    client: &ClientWithMiddleware,
     queries: &[AcsApiQueryParams],
 ) -> Result<Vec<(Geoid, Vec<AcsValue>)>, String> {
     let pb_builder = kdam::BarBuilder::default()
@@ -56,7 +57,7 @@ pub async fn batch_run(
 /// todo: this is faster than not parallel but we could probably do better if we
 /// remove the awaits and let the coroutines do the work.
 pub async fn run(
-    client: &Client,
+    client: &ClientWithMiddleware,
     query: &AcsApiQueryParams,
 ) -> Result<Vec<(Geoid, Vec<AcsValue>)>, String> {
     let url = query.build_url()?;
