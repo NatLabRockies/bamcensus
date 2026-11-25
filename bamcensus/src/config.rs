@@ -21,9 +21,9 @@ pub fn default_acs_year() -> u64 {
     DEFAULT_ACS_YEAR
 }
 
-/// Default ACS geospatial resolution ([`GeoidType::BlockGroup`]).
+/// Default ACS geospatial resolution ([`GeoidType::County`]).
 pub fn default_acs_resolution() -> GeoidType {
-    GeoidType::BlockGroup
+    GeoidType::County
 }
 
 /// Default ACS variable categories (`["B01001_001E"]` — total population).
@@ -59,7 +59,7 @@ pub struct AcsTigerConfig {
     /// ACS and TIGER dataset vintage year (defaults to `2025`).
     #[serde(default = "default_acs_year")]
     pub acs_year: u64,
-    /// Geospatial resolution for ACS queries (defaults to [`GeoidType::BlockGroup`]).
+    /// Geospatial resolution for ACS queries (defaults to [`GeoidType::County`]).
     #[serde(default = "default_acs_resolution")]
     pub acs_resolution: GeoidType,
     /// ACS variable identifiers to query (defaults to `["B01001_001E"]`).
@@ -238,6 +238,7 @@ impl LodesWacTigerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bamcensus_acs::model::AcsGeoidQuery;
     use bamcensus_core::model::identifier::Geoid;
 
     #[test]
@@ -247,13 +248,53 @@ mod tests {
         assert_eq!(default_cfg, from_empty_json);
         assert_eq!(default_cfg.acs_type, AcsType::FiveYear);
         assert_eq!(default_cfg.acs_year, 2025);
-        assert_eq!(default_cfg.acs_resolution, GeoidType::BlockGroup);
+        assert_eq!(default_cfg.acs_resolution, GeoidType::County);
         assert_eq!(default_cfg.acs_categories, vec!["B01001_001E".to_string()]);
         assert_eq!(default_cfg.api_token, None);
 
         let serialized = serde_json::to_string(&default_cfg).unwrap();
         let roundtrip: AcsTigerConfig = serde_json::from_str(&serialized).unwrap();
         assert_eq!(default_cfg, roundtrip);
+    }
+
+    #[test]
+    fn default_acs_resolution_supports_state_and_national_regions() {
+        let configs = [
+            AcsTigerConfig::default(),
+            serde_json::from_str::<AcsTigerConfig>("{}").unwrap(),
+        ];
+        let state = Geoid::try_from("08").unwrap();
+        for config in configs {
+            for region in [
+                RegionFilter::Geoids(vec![state.clone()]),
+                RegionFilter::national(),
+            ] {
+                let params = config.to_region_query_params(region);
+                let RegionFilter::Geoids(geoids) = params.region else {
+                    panic!("expected GEOID region");
+                };
+                assert!(!geoids.is_empty());
+                for geoid in geoids {
+                    let query = AcsGeoidQuery::new(Some(geoid), params.output_resolution).unwrap();
+                    assert!(query.to_query_key().contains("&for=county:*"));
+                }
+            }
+            assert!(AcsGeoidQuery::new(None, Some(config.acs_resolution)).is_ok());
+        }
+    }
+
+    #[test]
+    fn acs_resolution_can_be_explicitly_set_to_block_group() {
+        let config: AcsTigerConfig =
+            serde_json::from_str(r#"{"acs_resolution":"block_group"}"#).unwrap();
+        let county = Geoid::try_from("08001").unwrap();
+        let params = config.to_region_query_params(RegionFilter::Geoids(vec![county.clone()]));
+        assert_eq!(params.output_resolution, Some(GeoidType::BlockGroup));
+        let query = AcsGeoidQuery::new(Some(county), params.output_resolution).unwrap();
+        assert_eq!(
+            query.to_query_key(),
+            "&for=block%20group:*&in=state:08&in=county:001&in=tract:*"
+        );
     }
 
     #[test]
