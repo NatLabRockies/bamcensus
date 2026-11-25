@@ -114,10 +114,10 @@ async fn run_wac(args: &LodesTigerWacApi) {
     }
     let filename = dataset.output_filename(&wildcard);
     match std::fs::remove_file(format!("{filename}.metadata.json")) {
-         Ok(()) => {}
-         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-         Err(error) => panic!("failure removing previous LODES metadata: {error}"),
-     }
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => panic!("failure removing previous LODES metadata: {error}"),
+    }
     let mut writer = csv::WriterBuilder::new().from_path(&filename).unwrap();
     for row in res.join_dataset {
         let out_row = LodesTigerOutputRow::from(row);
